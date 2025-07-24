@@ -20,55 +20,93 @@ mod flow {
     }
 }
 
-mod window {
-    use crate::mpsc;
-    use winit::{
-        self,
-        application::ApplicationHandler,
-        event::WindowEvent,
-        event_loop::{self, EventLoop},
-        window::{Window, WindowAttributes},
-    };
-
-    struct WindowManager {
-        window: Option<Window>,
-        attrubutes: WindowAttributes,
-        tx: mpsc::UnboundedSender<WindowEvent>,
-    }
-
-    impl ApplicationHandler for WindowManager {
-        fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
-            self.window = Some(event_loop.create_window(self.attrubutes));
-        }
-        fn suspended(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
-            self.window = None;
-        }
-        fn window_event(
-            &mut self,
-            event_loop: &winit::event_loop::ActiveEventLoop,
-            window_id: winit::window::WindowId,
-            event: winit::event::WindowEvent,
-        ) {
-            self.tx.send(event);
-        }
-    }
-    fn run() {
-        let event_loop = EventLoop::new();
-    }
-}
-
 pub mod mpsc {
     pub use tokio::sync::mpsc::{Sender, UnboundedSender, channel, unbounded_channel};
     pub enum Receiver<V> {
-        Bounded(mpsc::Receiver<V>),
-        Unbounded(mpsc::UnboundedReceiver<V>),
+        Bounded(tokio::sync::mpsc::Receiver<V>),
+        Unbounded(tokio::sync::mpsc::UnboundedReceiver<V>),
     }
-    impl Receiver<V> {
-        pub async fn recv(&mut self) {
+    impl<V> Receiver<V> {
+        pub async fn recv(
+            &mut self,
+        ) -> Box<dyn std::future::Future<Output = std::option::Option<V>> + '_> {
             match self {
-                Self::Bounded(r) => r.recv(),
-                Self::Unbounded(r) => r.recv(),
+                Self::Bounded(r) => Box::new(r.recv()),
+                Self::Unbounded(r) => Box::new(r.recv()),
             }
+        }
+    }
+}
+
+pub mod vk {
+    use ash::{Entry, Instance, vk};
+    use std::error::Error;
+
+    struct VulkanManager {
+        entry: Entry,
+        instance: Instance,
+    }
+
+    impl VulkanManager {
+        fn init() -> Result<Self, Box<dyn Error>> {
+            let entry = Entry::linked();
+            let app_info = vk::ApplicationInfo {
+                api_version: vk::make_api_version(0, 1, 1, 0),
+                ..Default::default()
+            };
+            let create_info = vk::InstanceCreateInfo {
+                p_application_info: &app_info,
+                ..Default::default()
+            };
+            let instance = unsafe { entry.create_instance(&create_info, None)? };
+            Ok(Self { entry, instance })
+        }
+    }
+    impl Drop for VulkanManager {
+        fn drop(&mut self) {
+            unsafe {
+                self.instance.destroy_instance(None);
+            }
+        }
+    }
+}
+
+pub mod window {
+    use std::error::Error;
+
+    use sdl3::{
+        self, Sdl, VideoSubsystem,
+        video::{VkInstance, VkSurfaceKHR, Window},
+    };
+
+    struct WindowManager {
+        sdl_context: Sdl,
+        video_subsystem: VideoSubsystem,
+        window: Window,
+    }
+
+    impl WindowManager {
+        fn init() -> Self {
+            let sdl_context = sdl3::init().unwrap();
+            let video_subsystem = sdl_context.video().unwrap();
+            let window = video_subsystem
+                .window("Test window", 800, 600)
+                .position_centered()
+                .vulkan()
+                .build()
+                .unwrap();
+
+            Self {
+                sdl_context,
+                video_subsystem,
+                window,
+            }
+        }
+        fn create_vk_surface(&self, instance: VkInstance) -> Result<VkSurfaceKHR, Box<dyn Error>> {
+            Ok(self.window.vulkan_create_surface(instance)?)
+        }
+        fn get_vk_extensions(&self) -> Result<Vec<String>, Box<dyn Error>> {
+            Ok(self.window.vulkan_instance_extensions()?)
         }
     }
 }

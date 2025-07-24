@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-ash = "0.38"
-winit = "0.30"
+ash = {version = "0.38", features = ["linked"]}
 tokio = { version = "1", features = ["full"] }
+sdl3 = {version = "0.14", features = ["ash"]}
+# sdl3-sys = {version = "0.5", features = ["use-ash-v0-38"]}

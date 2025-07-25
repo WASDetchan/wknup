@@ -10,7 +10,7 @@ where
     T: Transformer<V1, V>,
     R: Transformer<V, V2>,
 {
-    let (tx, mut rx) = mpsc::channel::<V>(buffer);
+    let (tx, rx) = mpsc::channel::<V>(buffer);
     transmitter.set_tx(tx);
     reciever.set_rx(rx);
 }

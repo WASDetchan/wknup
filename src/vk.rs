@@ -1,5 +1,6 @@
 use ash::{Entry, Instance, vk};
-use std::error::Error;
+use std::{error::Error, ffi::CString, os::raw::c_char};
+use validation::ValidationLayerManager;
 
 use crate::window::WindowManager;
 
@@ -18,15 +19,31 @@ impl VulkanManager {
             api_version: vk::make_api_version(0, 1, 1, 0),
             ..Default::default()
         };
-        let create_info = vk::InstanceCreateInfo {
-            p_application_info: &app_info,
-            ..Default::default()
-        };
-        let instance = unsafe { entry.create_instance(&create_info, None)? };
-        let mut extension_manager = ExtensionManager::new();
-        extension_manager.enumerate(&entry)?;
 
         let window_manager = WindowManager::init();
+        let wm_required_extensions = window_manager.get_vk_extensions();
+
+        let mut extension_manager = ExtensionManager::new();
+        extension_manager.enumerate(&entry)?;
+        extension_manager.add_extensions(&wm_required_extensions?)?;
+        let (ext_pp, ext_count) = extension_manager.make_load_extension_list()?;
+
+        unsafe {
+            let x = CString::from_raw(*ext_pp as *mut c_char);
+            print!("{}", x.to_str()?);
+        }
+
+        let create_info = vk::InstanceCreateInfo {
+            p_application_info: &app_info,
+            enabled_extension_count: ext_count as u32,
+            pp_enabled_extension_names: ext_pp,
+            ..Default::default()
+        };
+
+        let instance = unsafe { entry.create_instance(&create_info, None)? };
+
+        let mut validation_manager = ValidationLayerManager::new();
+        validation_manager.enumerate(&entry);
 
         Ok(Self {
             entry,
@@ -38,7 +55,6 @@ impl VulkanManager {
     }
 
     pub fn init_surface(&mut self) -> Result<(), Box<dyn Error>> {
-        self.check_extensions(self.window_manager.get_vk_extensions()?)?;
         self.surface = Some(
             self.window_manager
                 .create_vk_surface(self.instance.handle())?,
@@ -59,8 +75,14 @@ impl Drop for VulkanManager {
 }
 
 #[derive(Default)]
+struct Extension {
+    name: CString,
+    enabled: bool,
+}
+#[derive(Default)]
 struct ExtensionManager {
-    available: Option<Vec<String>>,
+    available: Option<Vec<Extension>>,
+    to_load: Option<Vec<*const c_char>>,
 }
 
 impl ExtensionManager {
@@ -72,108 +94,69 @@ impl ExtensionManager {
             self.available = Some(
                 unsafe { entry.enumerate_instance_extension_properties(None)? }
                     .into_iter()
-                    .map(|ext| {
-                        ext.extension_name_as_c_str()
-                            .unwrap()
-                            .to_str()
-                            .unwrap()
-                            .to_owned()
+                    .map(|ext| Extension {
+                        name: ext.extension_name_as_c_str().unwrap().into(),
+                        enabled: false,
                     })
                     .collect(),
             );
         }
         Ok(())
     }
-    pub fn check_extensions(&self, extensions: &Vec<String>) -> Result<(), Box<dyn Error>> {
+    pub fn check_extensions(&self, extensions: &[String]) -> Result<(), Box<dyn Error>> {
         let Some(available) = &self.available else {
             return Err("Extensions were not enumerated before checking.".into());
         };
         for ext in extensions.iter() {
-            if !available.contains(ext) {
-                return Err(format!(
-                    "Extension not found: {ext}. Available_extensions: {:?}.",
-                    available
-                )
-                .into());
+            if !available
+                .iter()
+                .any(|a_ext| a_ext.name.to_str().unwrap() == ext.as_str())
+            {
+                return Err(format!("Extension not found: {ext}.").into());
             }
         }
         Ok(())
     }
-}
 
-#[cfg(debug_assertions)]
-#[derive(Default)]
-struct ValidationLayerManager {
-    available: Option<Vec<String>>,
-}
-
-#[cfg(debug_assertions)]
-impl ValidationLayerManager {
-    fn new() -> Self {
-        Self::default()
-    }
-    fn enumerate(&mut self, entry: &Entry) -> Result<(), Box<dyn Error>> {
-        if self.available.is_none() {
-            self.available = Some(
-                unsafe { entry.enumerate_instance_layer_properties()? }
-                    .into_iter()
-                    .map(|ext| {
-                        ext.layer_name_as_c_str()
-                            .unwrap()
-                            .to_str()
-                            .unwrap()
-                            .to_owned()
-                    })
-                    .collect(),
-            );
+    pub fn add_extensions(&mut self, extensions: &[String]) -> Result<(), Box<dyn Error>> {
+        self.check_extensions(extensions);
+        let available = (&mut self.available).as_mut().unwrap().iter_mut();
+        for a_ext in available {
+            if extensions.contains(&a_ext.name.to_str()?.to_owned()) {
+                a_ext.enabled = true;
+            }
         }
         Ok(())
+        // for ext in extensions {
+        //     if !self.extensions.contains(x) {
+        //         self.extensions.push(ext);
+        //     }
+        // }
     }
-    pub fn check_layers(&self, layers: &Vec<String>) -> Result<(), Box<dyn Error>> {
+
+    pub fn make_load_extension_list(
+        &mut self,
+    ) -> Result<(*const *const c_char, usize), Box<dyn Error>> {
         let Some(available) = &self.available else {
-            return Err("Validation layers were not enumerated before checking.".into());
+            return Err("Extensions were not enumerated before loading.".into());
         };
-        for l in layers.iter() {
-            if !available.contains(l) {
-                return Err(format!(
-                    "Validation layer not found: {l}. Available: {:?}.",
-                    available
-                )
-                .into());
-            }
-        }
-        Ok(())
+
+        self.to_load = Some(
+            available
+                .iter()
+                .filter(|e| e.enabled)
+                .map(|e| e.name.as_ptr())
+                .collect(),
+        );
+
+        Ok((
+            self.to_load.as_ref().unwrap().as_ptr(),
+            self.to_load.iter().count(),
+        ))
     }
 }
 
-#[cfg(not(debug_assertions))]
-#[derive(Default)]
-struct ValidationLayerManager {}
-
-#[cfg(not(debug_assertions))]
-impl ValidationLayerManager {
-    fn new() -> Self {
-        Self::default()
-    }
-    fn enumerate(&mut self, entry: &Entry) -> Result<(), Box<dyn Error>> {
-        Ok(())
-    }
-    pub fn check_layers(&self, layers: &Vec<String>) -> Result<(), Box<dyn Error>> {
-        let Some(available) = &self.available else {
-            return Err("Validation layers were not enumerated before checking.".into());
-        };
-        for l in layers.iter() {
-            if !available.contains(l) {
-                return Err(format!(
-                    "Validation layer not found: {l}. Available: {:?}.",
-                    available
-                )
-                .into());
-            }
-        }
-        Ok(())
-    }
-}
+mod validation;
 
 struct PhysicalDeviceManager {}
 

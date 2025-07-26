@@ -6,8 +6,8 @@ use sdl3::{
 };
 
 pub struct WindowManager {
-    sdl_context: Sdl,
-    video_subsystem: VideoSubsystem,
+    _sdl_context: Sdl,
+    _video_subsystem: VideoSubsystem,
     window: Window,
 }
 
@@ -23,8 +23,8 @@ impl WindowManager {
             .unwrap();
 
         Self {
-            sdl_context,
-            video_subsystem,
+            _sdl_context: sdl_context,
+            _video_subsystem: video_subsystem,
             window,
         }
     }

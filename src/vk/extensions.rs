@@ -56,7 +56,7 @@ impl ExtensionManager {
 
     pub fn add_extensions(&mut self, extensions: &[String]) -> Result<(), Box<dyn Error>> {
         self.check_extensions(extensions)?;
-        let available = (&mut self.available).as_mut().unwrap().iter_mut();
+        let available = (self.available).as_mut().unwrap().iter_mut();
         for a_ext in available {
             if extensions.contains(&a_ext.name.to_str()?.to_owned()) {
                 a_ext.enabled = true;

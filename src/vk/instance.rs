@@ -1,0 +1,131 @@
+use std::{
+    error::Error,
+    ffi::CString,
+    sync::Arc,
+};
+
+use ash::{
+    khr, vk::{self, ApplicationInfo, PhysicalDevice, SurfaceKHR}, Entry, Instance
+};
+use sdl3::video::Window;
+
+use super::{extensions::ExtensionManager, validation::ValidationLayerManager, PhysicalDeviceInfo};
+pub struct InstanceManager {
+    instance: Option<Instance>,
+    extensions: Vec<String>,
+    layers: Vec<String>,
+    extension_manager: ExtensionManager,
+    validation_manager: ValidationLayerManager,
+    entry: Arc<Entry>,
+    api_version: u32,
+    apllication_props: (String, u32),
+    engine_props: (String, u32),
+}
+
+impl InstanceManager {
+    pub fn init(entry: Arc<Entry>) -> Result<Self, Box<dyn Error>> {
+        let extension_manager = ExtensionManager::init(&entry)?;
+        let validation_manager = ValidationLayerManager::init(&entry)?;
+        Ok(Self {
+            instance: None,
+            extensions: Vec::new(),
+            layers: Vec::new(),
+            extension_manager,
+            validation_manager,
+            entry,
+            api_version: vk::make_api_version(0, 1, 0, 0),
+            apllication_props: (String::new(), 0),
+            engine_props: (String::new(), 0),
+        })
+    }
+    pub fn extensions(mut self, extensions: Vec<String>) -> Self {
+        self.extensions = extensions;
+        self
+    }
+    pub fn validation_layers(mut self, layers: Vec<String>) -> Self {
+        self.layers = layers;
+        self
+    }
+
+    pub fn api_version(mut self, version: u32) -> Self{
+        self.api_version = version;
+        self
+    }
+    pub fn application_props(mut self, name: String, version: u32) -> Self {
+        self.apllication_props = (name, version);
+        self
+    }
+    pub fn engine_props(mut self, name: String, version: u32) -> Self {
+        self.engine_props = (name, version);
+        self
+    }
+
+    pub fn init_instance(&mut self) -> Result<(), Box<dyn Error>> {
+        self.extension_manager.add_extensions(&self.extensions)?;
+        let extension_names = self.extension_manager.make_load_extension_list()?;
+
+        self.validation_manager.add_layers(&self.layers)?;
+        let layer_names = self.validation_manager.make_load_layer_list()?;
+
+        let app_name = CString::new(self.apllication_props.0.clone())?;
+        let engine_name = CString::new(self.engine_props.0.clone())?;
+        let application_info = ApplicationInfo::default()
+            .api_version(self.api_version)
+            .application_name(&app_name)
+            .application_version(self.apllication_props.1)
+            .engine_name(&engine_name)
+            .engine_version(self.engine_props.1);
+        let create_info = vk::InstanceCreateInfo::default()
+            .application_info(&application_info)
+            .enabled_extension_names(&extension_names)
+            .enabled_layer_names(&layer_names);
+        let instance = unsafe { self.entry.create_instance(&create_info, None) }?;
+        self.instance = Some(instance);
+        Ok(())
+    }
+    pub fn create_surface(&self, window: &Window) -> Result<SurfaceKHR, Box<dyn Error>> {
+        let Some(instance) = self.instance.as_ref() else {
+            return Err("cannot create surface before instance is initialized".into());
+        };
+        Ok(window.vulkan_create_surface(instance.handle())?)
+    }
+pub fn destroy_surface(&self, surface: SurfaceKHR) -> Result<(), Box<dyn Error>> {
+        let Some(instance) = self.instance.as_ref() else {
+            return Err(
+                "cannot make khr::surface::Instance before Instance is inititalized".into(),
+            );
+        };
+        let s_instance = khr::surface::Instance::new(&self.entry, instance);
+        unsafe {
+
+        s_instance.destroy_surface(surface, None);
+        }
+        Ok(())
+    }
+    pub fn enumerate_physical_devices(&self) -> Result<Vec<PhysicalDevice>, Box<dyn Error>> {
+        let Some(instace) = self.instance.as_ref() else {
+            return Err("instance was not initialized before enumerating physical devices".into());
+        };
+        instace.enumerate_physical_devices()?
+    }
+    pub fn get_physical_device_info(&self, device: PhysicalDevice) -> Result<PhysicalDeviceInfo, Box<dyn Error>>{
+        let Some(instace) = self.instance.as_ref() else {
+            return Err("instance was not initialized before getting physical device info".into());
+        };
+        PhysicalDeviceInfo {
+            properties: instace.get_physical_device_properties(device.clone()),
+            features: instace.get_physical_device_features(device)
+        }
+        Ok(())
+    }
+}
+
+impl Drop for InstanceManager {
+    fn drop(&mut self) {
+        if let Some(instance) = &self.instance.as_ref() {
+            unsafe {
+                instance.destroy_instance(None);
+            }
+        }
+    }
+}

@@ -57,7 +57,7 @@ impl ValidationLayerManager {
 
     pub fn add_layers(&mut self, layers: &[String]) -> Result<(), Box<dyn Error>> {
         self.check_layers(layers)?;
-        let available = (&mut self.available).as_mut().unwrap().iter_mut();
+        let available = (self.available).as_mut().unwrap().iter_mut();
         for a_vl in available {
             if layers.contains(&a_vl.name.to_str()?.to_owned()) {
                 a_vl.enabled = true;

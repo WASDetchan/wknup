@@ -1,119 +1,134 @@
 use ash::{
-    Device, Entry, Instance,
-    khr::{self, surface},
-    vk::{
-        self, DeviceCreateInfo, DeviceQueueCreateInfo, PhysicalDevice, PhysicalDeviceFeatures,
-        PhysicalDeviceType, Queue, QueueFamilyProperties, QueueFlags, SurfaceKHR,
-    },
+    vk::{self, PhysicalDevice, PhysicalDeviceFeatures, PhysicalDeviceProperties, PhysicalDeviceType, Queue, QueueFamilyProperties, SurfaceKHR}, Device, Entry
 };
-use extensions::ExtensionManager;
-use std::{error::Error, rc::Rc, vec::IntoIter};
-use validation::ValidationLayerManager;
+use core::fmt;
+use instance::InstanceManager;
+use std::{error::Error, sync::Arc, vec::IntoIter};
 
 use crate::window::WindowManager;
 
+pub mod instance;
+
+#[derive(Debug)]
+enum VulkanInitStage {
+    Entry,
+    WindowManager,
+    InstanceManager,
+    Surface,
+}
+
+impl fmt::Display for VulkanInitStage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                VulkanInitStage::Entry => "Entry",
+                VulkanInitStage::WindowManager => "WindowManager",
+                VulkanInitStage::InstanceManager => "InstanceManager",
+                VulkanInitStage::Surface => "Surface",
+            }
+        )
+    }
+}
+#[derive(Debug)]
+struct VulkanInitOrderError {
+    attempted_stage: VulkanInitStage,
+    requiered_stage: VulkanInitStage,
+}
+impl fmt::Display for VulkanInitOrderError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "unable to initialize {} before {} is initalized",
+            self.attempted_stage, self.requiered_stage
+        )
+    }
+}
+
+impl Error for VulkanInitOrderError {}
+
+#[derive(Default)]
 pub struct VulkanManager {
-    entry: Entry,
-    instance: Instance,
-    extension_manager: ExtensionManager,
-    window_manager: WindowManager,
-    device_manager: Option<DeviceManager>,
-    surface: Option<vk::SurfaceKHR>,
-    surface_instance: khr::surface::Instance,
+    entry: Option<Arc<Entry>>,
+    instance_manager: Option<Arc<InstanceManager>>,
+    window_manager: Option<WindowManager>,
+    // device_manager: Option<DeviceManager>,
 }
 
 impl VulkanManager {
+    pub fn new() -> Self {
+        Self::default()
+    }
+    fn init_entry(&mut self) {
+        self.entry = Some(Arc::new(Entry::linked()));
+    }
+    fn init_window_manager(&mut self) {
+        self.window_manager = Some(WindowManager::init());
+    }
+    fn init_instance(&mut self) -> Result<(), Box<dyn Error>> {
+        let Some(entry) = self.entry.clone() else {
+            return Err(Box::new(VulkanInitOrderError {
+                attempted_stage: VulkanInitStage::InstanceManager,
+                requiered_stage: VulkanInitStage::Entry,
+            }));
+        };
+        let Some(window_manager) = self.window_manager.as_ref() else {
+            return Err(Box::new(VulkanInitOrderError {
+                attempted_stage: VulkanInitStage::InstanceManager,
+                requiered_stage: VulkanInitStage::WindowManager,
+            }));
+        };
+
+        let wm_required_extensions = window_manager.get_vk_extensions()?;
+
+        let mut instance_manager = InstanceManager::init(entry)?
+            .extensions(wm_required_extensions)
+            .validation_layers(vec![String::from("VK_LAYER_KHRONOS_validation")])
+            .application_props(String::from("WKNUP"), 1)
+            .api_version(vk::make_api_version(0, 1, 1, 0));
+        instance_manager.init_instance()?;
+
+        self.instance_manager = Some(Arc::new(instance_manager));
+
+        Ok(())
+    }
+
+    fn init_surface(&mut self) -> Result<(), Box<dyn Error>> {
+        if self.instance_manager.is_none() {
+            return Err(Box::new(VulkanInitOrderError {
+                attempted_stage: VulkanInitStage::Surface,
+                requiered_stage: VulkanInitStage::InstanceManager,
+            }));
+        };
+        self.window_manager
+            .as_mut()
+            .expect("window_manager is always initialized at this point")
+            .init_surface(Arc::clone(self.instance_manager.as_ref().unwrap()))?;
+        Ok(())
+    }
     pub fn init() -> Result<Self, Box<dyn Error>> {
-        let entry = Entry::linked();
-        let app_info = vk::ApplicationInfo {
-            api_version: vk::make_api_version(0, 1, 1, 0),
-            ..Default::default()
-        };
-
-        let window_manager = WindowManager::init();
-        let wm_required_extensions = window_manager.get_vk_extensions();
-
-        let mut extension_manager = ExtensionManager::init(&entry)?;
-        extension_manager.add_extensions(&wm_required_extensions?)?;
-        let extension_names = extension_manager.make_load_extension_list()?;
-
-        let validation_layers = vec![String::from("VK_LAYER_KHRONOS_validation")];
-        let mut validation_manager = ValidationLayerManager::init(&entry)?;
-        validation_manager.add_layers(&validation_layers)?;
-        let validation_layer_names = validation_manager.make_load_layer_list()?;
-
-        let create_info = vk::InstanceCreateInfo::default()
-            .application_info(&app_info)
-            .enabled_layer_names(&validation_layer_names)
-            .enabled_extension_names(&extension_names);
-
-        let instance = unsafe { entry.create_instance(&create_info, None)? };
-        let surface_instance = khr::surface::Instance::new(&entry, &instance);
-
-        let mut vulkan_manager = Self {
-            entry,
-            instance,
-            extension_manager,
-            window_manager,
-            device_manager: None,
-            surface_instance,
-            surface: None,
-        };
-
+        let mut vulkan_manager = Self::default();
+        vulkan_manager.init_entry();
+        vulkan_manager.init_window_manager();
+        vulkan_manager.init_instance()?;
         vulkan_manager.init_surface()?;
-
-        let device_manager = unsafe {
-            DeviceManager::init(
-                &vulkan_manager.instance,
-                vulkan_manager.surface.unwrap().clone(),
-                vulkan_manager.surface_instance.clone(),
-            )?
-        };
-
-        vulkan_manager.device_manager = Some(device_manager);
-
         Ok(vulkan_manager)
     }
 
-    pub fn init_surface(&mut self) -> Result<(), Box<dyn Error>> {
-        self.surface = Some(
-            self.window_manager
-                .create_vk_surface(self.instance.handle())?,
-        );
-        Ok(())
-    }
-}
-impl Drop for VulkanManager {
-    fn drop(&mut self) {
-        if let Some(surface_khr) = self.surface.take() {
-            unsafe {
-                self.surface_instance.destroy_surface(surface_khr, None);
-            }
-        }
-
-        if let Some(dm) = self.device_manager.as_mut() {
-            unsafe {
-                dm.destroy_device();
-            }
-        }
-        unsafe {
-            self.instance.destroy_instance(None);
-        }
-    }
 }
 
 mod extensions;
 
 mod validation;
 
-type Filter =
-    Box<dyn Fn(&Instance, &PhysicalDevice, usize, &QueueFamilyProperties) -> bool + Clone>;
+
 #[derive(Clone)]
 struct QueueFamilyIndicies {
     graphics: Option<usize>,
     present: Option<usize>,
-    graphics_filter: Filter,
-    present_filter: Filter,
+    graphics_filter: &impl Fn(&PhysicalDevice, usize, &QueueFamilyProperties) -> bool,
+    present_filter: &impl Fn(&PhysicalDevice, usize, &QueueFamilyProperties) -> bool,
 }
 
 struct Queues {
@@ -122,7 +137,7 @@ struct Queues {
 }
 
 impl QueueFamilyIndicies {
-    fn new(graphics_filter: Filter, present_filter: Filter) -> Self {
+    fn new(graphics_filter: &impl Fn(&PhysicalDevice, usize, &QueueFamilyProperties) -> bool, present_filter: &impl Fn(&PhysicalDevice, usize, &QueueFamilyProperties) -> bool) -> Self {
         Self {
             graphics: None,
             present: None,
@@ -132,28 +147,27 @@ impl QueueFamilyIndicies {
     }
     unsafe fn try_queue(
         &mut self,
-        instance: &Instance,
         physical_device: &PhysicalDevice,
         id: usize,
         props: &QueueFamilyProperties,
     ) {
-        if (self.graphics_filter)(instance, physical_device, id, props) {
+        if (self.graphics_filter)(physical_device, id, props) {
             self.graphics = Some(id);
         };
-        if (self.present_filter)(instance, physical_device, id, props) {
+        if (self.present_filter)(physical_device, id, props) {
             self.present = Some(id);
         }
     }
-    unsafe fn fill(&mut self, instance: &Instance, physical_device: &PhysicalDevice) {
+    unsafe fn fill(&mut self, instance: Arc<InstanceManager>, physical_device: &PhysicalDevice) {
         unsafe { Self::iterate_physical_device_queue_families(instance, physical_device) }
             .enumerate()
-            .for_each(|(id, prop)| unsafe { self.try_queue(instance, physical_device, id, &prop) });
+            .for_each(|(id, prop)| unsafe { self.try_queue(physical_device, id, &prop) });
     }
     fn is_complete(&self) -> bool {
         self.graphics.is_some() && self.present.is_some()
     }
     unsafe fn iterate_physical_device_queue_families(
-        instance: &Instance,
+        instance: Arc<InstanceManager>,
         physical_device: &PhysicalDevice,
     ) -> IntoIter<QueueFamilyProperties> {
         unsafe { instance.get_physical_device_queue_family_properties(physical_device.clone()) }
@@ -161,48 +175,54 @@ impl QueueFamilyIndicies {
     }
 }
 
+struct PhysicalDeviceInfo {
+    properties: PhysicalDeviceProperties,
+    features: PhysicalDeviceFeatures,
+}
+
 struct DeviceManager {
     _physical_device: PhysicalDevice,
     _queue_families: QueueFamilyIndicies,
-    device: Device,
+    instance: Arc<InstanceManager>,
+    device: Option<Device>,
     queue: Queue,
 }
 impl DeviceManager {
-    unsafe fn iterate_physical_devices(
-        instance: &Instance,
+    fn iterate_physical_devices(
+        instance: Arc<InstanceManager>,
     ) -> Result<IntoIter<PhysicalDevice>, Box<dyn Error>> {
-        Ok(unsafe { instance.enumerate_physical_devices() }?.into_iter())
+        Ok( instance.enumerate_physical_devices() ?.into_iter())
     }
 
-    unsafe fn rate_physical_device(
-        instance: &Instance,
+    fn rate_physical_device(
+        instance: Arc<InstanceManager>,
         device: &PhysicalDevice,
         mut qfi: QueueFamilyIndicies,
     ) -> u32 {
-        let props = unsafe { instance.get_physical_device_properties(device.clone()) };
-        let features = unsafe { instance.get_physical_device_features(device.clone()) };
-        unsafe { qfi.fill(instance, device) };
+        let info = instance.get_physical_device_info(device.clone())?;
+        let props =  info.properties;
+        let features = info.features;
+        { qfi.fill(instance, device) };
         ((props.device_type == PhysicalDeviceType::DISCRETE_GPU
             || props.device_type == PhysicalDeviceType::INTEGRATED_GPU)
             && (features.geometry_shader == 1)
             && qfi.is_complete()) as u32
     }
 
-    pub unsafe fn init(
-        instance: &Instance,
+    pub fn init(
+        instance: Arc<InstanceManager>,
         surface_khr: SurfaceKHR,
-        surface_instance: surface::Instance,
     ) -> Result<Self, Box<dyn Error>> {
         let mut qfi = QueueFamilyIndicies::new(
             Box::new(|_, _, _, props| props.queue_flags.contains(QueueFlags::GRAPHICS)),
-            Box::new(|_, device, id, _| unsafe {
+            Box::new(|_, device, id, _| {
                 surface_instance
                     .get_physical_device_surface_support(device.clone(), id as u32, surface_khr)
                     .unwrap_or(false)
             }),
         );
 
-        let physical_device = unsafe {
+        let physical_device = {
             Self::iterate_physical_devices(instance)?
                 .map(|pdev| {
                     (
@@ -220,7 +240,7 @@ impl DeviceManager {
         }
         let physical_device = physical_device.1;
 
-        unsafe {
+        {
             qfi.fill(instance, &physical_device);
         }
         let queue_info = DeviceQueueCreateInfo::default()
@@ -232,8 +252,8 @@ impl DeviceManager {
         let device_info = DeviceCreateInfo::default()
             .queue_create_infos(&queue_infos)
             .enabled_features(&device_features);
-        let device = unsafe { instance.create_device(physical_device, &device_info, None)? };
-        let queue = unsafe { device.get_device_queue(qfi.graphics.unwrap() as u32, 0) };
+        let device = { instance.create_device(physical_device, &device_info, None)? };
+        let queue = { device.get_device_queue(qfi.graphics.unwrap() as u32, 0) };
         Ok(Self {
             _physical_device: physical_device,
             _queue_families: qfi,
@@ -241,7 +261,10 @@ impl DeviceManager {
             queue,
         })
     }
-    pub unsafe fn destroy_device(&mut self) {
-        unsafe { self.device.destroy_device(None) };
+    pub fn destroy_device(&mut self) {
+        if let Some(device) = self.device.as_ref() {
+
+        unsafe { device.destroy_device(None) };
+        }
     }
 }

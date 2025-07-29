@@ -1,5 +1,9 @@
 use ash::{
-    vk::{self, PhysicalDevice, PhysicalDeviceFeatures, PhysicalDeviceProperties, PhysicalDeviceType, Queue, QueueFamilyProperties, SurfaceKHR}, Device, Entry
+    Device, Entry,
+    vk::{
+        self, PhysicalDevice, PhysicalDeviceFeatures, PhysicalDeviceProperties, PhysicalDeviceType,
+        Queue, QueueFamilyProperties, SurfaceKHR,
+    },
 };
 use core::fmt;
 use instance::InstanceManager;
@@ -115,13 +119,11 @@ impl VulkanManager {
         vulkan_manager.init_surface()?;
         Ok(vulkan_manager)
     }
-
 }
 
 mod extensions;
 
 mod validation;
-
 
 #[derive(Clone)]
 struct QueueFamilyIndicies {
@@ -137,7 +139,10 @@ struct Queues {
 }
 
 impl QueueFamilyIndicies {
-    fn new(graphics_filter: &impl Fn(&PhysicalDevice, usize, &QueueFamilyProperties) -> bool, present_filter: &impl Fn(&PhysicalDevice, usize, &QueueFamilyProperties) -> bool) -> Self {
+    fn new(
+        graphics_filter: &impl Fn(&PhysicalDevice, usize, &QueueFamilyProperties) -> bool,
+        present_filter: &impl Fn(&PhysicalDevice, usize, &QueueFamilyProperties) -> bool,
+    ) -> Self {
         Self {
             graphics: None,
             present: None,
@@ -191,7 +196,7 @@ impl DeviceManager {
     fn iterate_physical_devices(
         instance: Arc<InstanceManager>,
     ) -> Result<IntoIter<PhysicalDevice>, Box<dyn Error>> {
-        Ok( instance.enumerate_physical_devices() ?.into_iter())
+        Ok(instance.enumerate_physical_devices()?.into_iter())
     }
 
     fn rate_physical_device(
@@ -200,9 +205,11 @@ impl DeviceManager {
         mut qfi: QueueFamilyIndicies,
     ) -> u32 {
         let info = instance.get_physical_device_info(device.clone())?;
-        let props =  info.properties;
+        let props = info.properties;
         let features = info.features;
-        { qfi.fill(instance, device) };
+        {
+            qfi.fill(instance, device)
+        };
         ((props.device_type == PhysicalDeviceType::DISCRETE_GPU
             || props.device_type == PhysicalDeviceType::INTEGRATED_GPU)
             && (features.geometry_shader == 1)
@@ -259,12 +266,12 @@ impl DeviceManager {
             _queue_families: qfi,
             device,
             queue,
+            instance,
         })
     }
     pub fn destroy_device(&mut self) {
         if let Some(device) = self.device.as_ref() {
-
-        unsafe { device.destroy_device(None) };
+            unsafe { device.destroy_device(None) };
         }
     }
 }

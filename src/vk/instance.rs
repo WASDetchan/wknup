@@ -1,15 +1,11 @@
-use std::{
-    error::Error,
-    ffi::CString,
-    sync::Arc,
-};
+use std::{error::Error, ffi::CString, sync::Arc};
 
 use ash::{
-    khr, vk::{self, ApplicationInfo, PhysicalDevice, SurfaceKHR}, Entry, Instance
+    khr, vk::{self, ApplicationInfo, DeviceCreateInfo, PhysicalDevice, SurfaceKHR}, Entry, Instance
 };
 use sdl3::video::Window;
 
-use super::{extensions::ExtensionManager, validation::ValidationLayerManager, PhysicalDeviceInfo};
+use super::{PhysicalDeviceInfo, extensions::ExtensionManager, validation::ValidationLayerManager};
 pub struct InstanceManager {
     instance: Option<Instance>,
     extensions: Vec<String>,
@@ -47,7 +43,7 @@ impl InstanceManager {
         self
     }
 
-    pub fn api_version(mut self, version: u32) -> Self{
+    pub fn api_version(mut self, version: u32) -> Self {
         self.api_version = version;
         self
     }
@@ -89,7 +85,7 @@ impl InstanceManager {
         };
         Ok(window.vulkan_create_surface(instance.handle())?)
     }
-pub fn destroy_surface(&self, surface: SurfaceKHR) -> Result<(), Box<dyn Error>> {
+    pub fn destroy_surface(&self, surface: SurfaceKHR) -> Result<(), Box<dyn Error>> {
         let Some(instance) = self.instance.as_ref() else {
             return Err(
                 "cannot make khr::surface::Instance before Instance is inititalized".into(),
@@ -97,8 +93,7 @@ pub fn destroy_surface(&self, surface: SurfaceKHR) -> Result<(), Box<dyn Error>>
         };
         let s_instance = khr::surface::Instance::new(&self.entry, instance);
         unsafe {
-
-        s_instance.destroy_surface(surface, None);
+            s_instance.destroy_surface(surface, None);
         }
         Ok(())
     }
@@ -108,15 +103,23 @@ pub fn destroy_surface(&self, surface: SurfaceKHR) -> Result<(), Box<dyn Error>>
         };
         instace.enumerate_physical_devices()?
     }
-    pub fn get_physical_device_info(&self, device: PhysicalDevice) -> Result<PhysicalDeviceInfo, Box<dyn Error>>{
+    pub fn get_physical_device_info(
+        &self,
+        device: PhysicalDevice,
+    ) -> Result<PhysicalDeviceInfo, Box<dyn Error>> {
         let Some(instace) = self.instance.as_ref() else {
             return Err("instance was not initialized before getting physical device info".into());
         };
-        PhysicalDeviceInfo {
-            properties: instace.get_physical_device_properties(device.clone()),
-            features: instace.get_physical_device_features(device)
-        }
-        Ok(())
+        Ok(PhysicalDeviceInfo {
+            properties: unsafe{instace.get_physical_device_properties(device.clone())},
+            features: unsafe{instace.get_physical_device_features(device)},
+        })
+    }
+    pub fn crea_device(&self, physical_device: PhysicalDevice, device_info: &DeviceCreateInfo) {
+        let Some(instace) = self.instance.as_ref() else {
+            return Err("instance was not initialized before creating device".into());
+        };
+        unsafe{self.instance.unwrap().create_device(physical_device, device_info, None)}
     }
 }
 

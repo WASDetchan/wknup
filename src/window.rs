@@ -12,7 +12,7 @@ pub struct WindowManager {
     window: Window,
     surface: Option<VkSurfaceKHR>,
     // surface_instance: Option<khr::surface::Instance>,
-    instance: Option<Arc<InstanceManager>>
+    instance: Option<Arc<InstanceManager>>,
 }
 
 impl WindowManager {
@@ -52,8 +52,11 @@ impl WindowManager {
 impl Drop for WindowManager {
     fn drop(&mut self) {
         if let Some(surface) = self.surface {
-
-        self.instance.as_ref().expect("instance is initalized before surface").destroy_surface(surface).expect("instance is initalized before surface");
+            self.instance
+                .as_ref()
+                .expect("instance is initalized before surface")
+                .destroy_surface(surface)
+                .expect("instance is initalized before surface");
         }
     }
 }

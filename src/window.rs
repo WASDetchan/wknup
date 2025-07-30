@@ -1,6 +1,7 @@
 use crate::vk::instance::InstanceManager;
 use std::{error::Error, sync::Arc};
 
+use ash::vk::SurfaceKHR;
 use sdl3::{
     self, Sdl, VideoSubsystem,
     video::{VkSurfaceKHR, Window},
@@ -40,6 +41,9 @@ impl WindowManager {
         self.surface = surface;
         self.instance = Some(instance);
         Ok(())
+    }
+    pub fn surface(&self) -> Option<SurfaceKHR> {
+        self.surface
     }
     // pub fn create_vk_surface(&self, instance: VkInstance) -> Result<VkSurfaceKHR, Box<dyn Error>> {
     //     Ok(self.window.vulkan_create_surface(instance)?)

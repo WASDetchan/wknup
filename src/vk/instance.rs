@@ -8,7 +8,8 @@ use ash::{
 };
 use sdl3::video::Window;
 
-use super::{PhysicalDeviceInfo, extensions::ExtensionManager, validation::ValidationLayerManager};
+use super::{extensions::ExtensionManager, validation::ValidationLayerManager};
+use crate::vk::device::PhysicalDeviceInfo;
 pub struct InstanceManager {
     instance: Option<Instance>,
     extensions: Vec<String>,
@@ -114,7 +115,7 @@ impl InstanceManager {
             return Err("instance was not initialized before getting physical device info".into());
         };
         Ok(PhysicalDeviceInfo {
-            properties: unsafe { instace.get_physical_device_properties(device.clone()) },
+            properties: unsafe { instace.get_physical_device_properties(device) },
             features: unsafe { instace.get_physical_device_features(device) },
         })
     }

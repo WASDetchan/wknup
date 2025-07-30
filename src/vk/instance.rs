@@ -1,7 +1,10 @@
 use std::{error::Error, ffi::CString, sync::Arc};
 
 use ash::{
-    khr, vk::{self, ApplicationInfo, DeviceCreateInfo, PhysicalDevice, SurfaceKHR}, Entry, Instance
+    Device, Entry, Instance, khr,
+    vk::{
+        self, ApplicationInfo, DeviceCreateInfo, PhysicalDevice, QueueFamilyProperties, SurfaceKHR,
+    },
 };
 use sdl3::video::Window;
 
@@ -101,7 +104,7 @@ impl InstanceManager {
         let Some(instace) = self.instance.as_ref() else {
             return Err("instance was not initialized before enumerating physical devices".into());
         };
-        instace.enumerate_physical_devices()?
+        Ok(unsafe { instace.enumerate_physical_devices() }?)
     }
     pub fn get_physical_device_info(
         &self,
@@ -111,15 +114,40 @@ impl InstanceManager {
             return Err("instance was not initialized before getting physical device info".into());
         };
         Ok(PhysicalDeviceInfo {
-            properties: unsafe{instace.get_physical_device_properties(device.clone())},
-            features: unsafe{instace.get_physical_device_features(device)},
+            properties: unsafe { instace.get_physical_device_properties(device.clone()) },
+            features: unsafe { instace.get_physical_device_features(device) },
         })
     }
-    pub fn crea_device(&self, physical_device: PhysicalDevice, device_info: &DeviceCreateInfo) {
-        let Some(instace) = self.instance.as_ref() else {
+    pub fn get_physical_device_queue_family_properties(
+        &self,
+        physical_device: PhysicalDevice,
+    ) -> Result<Vec<QueueFamilyProperties>, Box<dyn Error>> {
+        let Some(instance) = self.instance.as_ref() else {
+            return Err("instance was not initialized before getting physical device info".into());
+        };
+        Ok(unsafe { instance.get_physical_device_queue_family_properties(physical_device) })
+    }
+    pub fn get_physical_device_surface_support(
+        &self,
+        device: PhysicalDevice,
+        id: u32,
+        surface: SurfaceKHR,
+    ) -> Result<bool, Box<dyn Error>> {
+        let Some(instance) = self.instance.as_ref() else {
+            return Err("instance was not initialized before getting physical device info".into());
+        };
+        let s_instance = khr::surface::Instance::new(&self.entry, instance);
+        Ok(unsafe { s_instance.get_physical_device_surface_support(device, id, surface) }?)
+    }
+    pub fn create_device(
+        &self,
+        physical_device: PhysicalDevice,
+        device_info: &DeviceCreateInfo,
+    ) -> Result<Device, Box<dyn Error>> {
+        let Some(instance) = self.instance.as_ref() else {
             return Err("instance was not initialized before creating device".into());
         };
-        unsafe{self.instance.unwrap().create_device(physical_device, device_info, None)}
+        Ok(unsafe { instance.create_device(physical_device, device_info, None) }?)
     }
 }
 

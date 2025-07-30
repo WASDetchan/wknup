@@ -1,8 +1,9 @@
 use ash::{
     Device, Entry,
     vk::{
-        self, PhysicalDevice, PhysicalDeviceFeatures, PhysicalDeviceProperties, PhysicalDeviceType,
-        Queue, QueueFamilyProperties, SurfaceKHR,
+        self, DeviceCreateInfo, DeviceQueueCreateInfo, PhysicalDevice, PhysicalDeviceFeatures,
+        PhysicalDeviceProperties, PhysicalDeviceType, Queue, QueueFamilyProperties, QueueFlags,
+        SurfaceKHR,
     },
 };
 use core::fmt;
@@ -124,13 +125,13 @@ impl VulkanManager {
 mod extensions;
 
 mod validation;
-
+type QFFilter = Arc<dyn Fn(&PhysicalDevice, usize, &QueueFamilyProperties) -> bool>;
 #[derive(Clone)]
 struct QueueFamilyIndicies {
     graphics: Option<usize>,
     present: Option<usize>,
-    graphics_filter: &impl Fn(&PhysicalDevice, usize, &QueueFamilyProperties) -> bool,
-    present_filter: &impl Fn(&PhysicalDevice, usize, &QueueFamilyProperties) -> bool,
+    graphics_filter: QFFilter,
+    present_filter: QFFilter,
 }
 
 struct Queues {
@@ -139,10 +140,7 @@ struct Queues {
 }
 
 impl QueueFamilyIndicies {
-    fn new(
-        graphics_filter: &impl Fn(&PhysicalDevice, usize, &QueueFamilyProperties) -> bool,
-        present_filter: &impl Fn(&PhysicalDevice, usize, &QueueFamilyProperties) -> bool,
-    ) -> Self {
+    fn new(graphics_filter: QFFilter, present_filter: QFFilter) -> Self {
         Self {
             graphics: None,
             present: None,
@@ -163,19 +161,21 @@ impl QueueFamilyIndicies {
             self.present = Some(id);
         }
     }
-    unsafe fn fill(&mut self, instance: Arc<InstanceManager>, physical_device: &PhysicalDevice) {
-        unsafe { Self::iterate_physical_device_queue_families(instance, physical_device) }
+    fn fill(&mut self, instance: &Arc<InstanceManager>, physical_device: &PhysicalDevice) {
+        Self::iterate_physical_device_queue_families(instance, physical_device)
             .enumerate()
             .for_each(|(id, prop)| unsafe { self.try_queue(physical_device, id, &prop) });
     }
     fn is_complete(&self) -> bool {
         self.graphics.is_some() && self.present.is_some()
     }
-    unsafe fn iterate_physical_device_queue_families(
-        instance: Arc<InstanceManager>,
+    fn iterate_physical_device_queue_families(
+        instance: &Arc<InstanceManager>,
         physical_device: &PhysicalDevice,
     ) -> IntoIter<QueueFamilyProperties> {
-        unsafe { instance.get_physical_device_queue_family_properties(physical_device.clone()) }
+        instance
+            .get_physical_device_queue_family_properties(physical_device.clone())
+            .unwrap()
             .into_iter()
     }
 }
@@ -200,16 +200,14 @@ impl DeviceManager {
     }
 
     fn rate_physical_device(
-        instance: Arc<InstanceManager>,
+        instance: &Arc<InstanceManager>,
         device: &PhysicalDevice,
         mut qfi: QueueFamilyIndicies,
     ) -> u32 {
-        let info = instance.get_physical_device_info(device.clone())?;
+        let info = instance.get_physical_device_info(device.clone()).unwrap();
         let props = info.properties;
         let features = info.features;
-        {
-            qfi.fill(instance, device)
-        };
+        unsafe { qfi.fill(instance, device) };
         ((props.device_type == PhysicalDeviceType::DISCRETE_GPU
             || props.device_type == PhysicalDeviceType::INTEGRATED_GPU)
             && (features.geometry_shader == 1)
@@ -220,20 +218,21 @@ impl DeviceManager {
         instance: Arc<InstanceManager>,
         surface_khr: SurfaceKHR,
     ) -> Result<Self, Box<dyn Error>> {
+        let d_instance = instance.clone();
         let mut qfi = QueueFamilyIndicies::new(
-            Box::new(|_, _, _, props| props.queue_flags.contains(QueueFlags::GRAPHICS)),
-            Box::new(|_, device, id, _| {
-                surface_instance
+            Arc::new(move |_, _, props| props.queue_flags.contains(QueueFlags::GRAPHICS)),
+            Arc::new(move |device, id, _| {
+                d_instance
                     .get_physical_device_surface_support(device.clone(), id as u32, surface_khr)
                     .unwrap_or(false)
             }),
         );
 
         let physical_device = {
-            Self::iterate_physical_devices(instance)?
+            Self::iterate_physical_devices(instance.clone())?
                 .map(|pdev| {
                     (
-                        Self::rate_physical_device(instance, &pdev, qfi.clone()),
+                        Self::rate_physical_device(&instance, &pdev, qfi.clone()),
                         pdev,
                     )
                 })
@@ -247,9 +246,7 @@ impl DeviceManager {
         }
         let physical_device = physical_device.1;
 
-        {
-            qfi.fill(instance, &physical_device);
-        }
+        qfi.fill(&instance, &physical_device);
         let queue_info = DeviceQueueCreateInfo::default()
             .queue_family_index(qfi.graphics.unwrap() as u32)
             .queue_priorities(&[0.0f32]);
@@ -259,12 +256,12 @@ impl DeviceManager {
         let device_info = DeviceCreateInfo::default()
             .queue_create_infos(&queue_infos)
             .enabled_features(&device_features);
-        let device = { instance.create_device(physical_device, &device_info, None)? };
-        let queue = { device.get_device_queue(qfi.graphics.unwrap() as u32, 0) };
+        let device = instance.create_device(physical_device, &device_info)?;
+        let queue = unsafe { device.get_device_queue(qfi.graphics.unwrap() as u32, 0) };
         Ok(Self {
             _physical_device: physical_device,
             _queue_families: qfi,
-            device,
+            device: Some(device),
             queue,
             instance,
         })

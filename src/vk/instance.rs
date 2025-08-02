@@ -3,7 +3,9 @@ use std::{error::Error, ffi::CString, sync::Arc};
 use ash::{
     Device, Entry, Instance, khr,
     vk::{
-        self, ApplicationInfo, DeviceCreateInfo, PhysicalDevice, QueueFamilyProperties, SurfaceKHR,
+        self, ApplicationInfo, DeviceCreateInfo, ExtensionProperties, PhysicalDevice,
+        PresentModeKHR, QueueFamilyProperties, SurfaceCapabilitiesKHR, SurfaceFormatKHR,
+        SurfaceKHR, SurfacePresentModeEXT,
     },
 };
 use sdl3::video::Window;
@@ -102,21 +104,21 @@ impl InstanceManager {
         Ok(())
     }
     pub fn enumerate_physical_devices(&self) -> Result<Vec<PhysicalDevice>, Box<dyn Error>> {
-        let Some(instace) = self.instance.as_ref() else {
+        let Some(instance) = self.instance.as_ref() else {
             return Err("instance was not initialized before enumerating physical devices".into());
         };
-        Ok(unsafe { instace.enumerate_physical_devices() }?)
+        Ok(unsafe { instance.enumerate_physical_devices() }?)
     }
     pub fn get_physical_device_info(
         &self,
         device: PhysicalDevice,
     ) -> Result<PhysicalDeviceInfo, Box<dyn Error>> {
-        let Some(instace) = self.instance.as_ref() else {
+        let Some(instance) = self.instance.as_ref() else {
             return Err("instance was not initialized before getting physical device info".into());
         };
         Ok(PhysicalDeviceInfo {
-            properties: unsafe { instace.get_physical_device_properties(device) },
-            features: unsafe { instace.get_physical_device_features(device) },
+            properties: unsafe { instance.get_physical_device_properties(device) },
+            features: unsafe { instance.get_physical_device_features(device) },
         })
     }
     pub fn get_physical_device_queue_family_properties(
@@ -150,11 +152,46 @@ impl InstanceManager {
         };
         Ok(unsafe { instance.create_device(physical_device, device_info, None) }?)
     }
+    pub unsafe fn enumerate_device_extension_properties(
+        &self,
+        device: PhysicalDevice,
+    ) -> Result<Vec<ExtensionProperties>, Box<dyn Error>> {
+        let Some(instance) = self.instance.as_ref() else {
+            return Err("instance was not initialized before getting device info".into());
+        };
+
+        Ok(unsafe { instance.enumerate_device_extension_properties(device)? })
+    }
+    pub unsafe fn get_physical_device_surface_info(
+        &self,
+        device: PhysicalDevice,
+        surface: SurfaceKHR,
+    ) -> Result<
+        (
+            SurfaceCapabilitiesKHR,
+            Vec<SurfaceFormatKHR>,
+            Vec<PresentModeKHR>,
+        ),
+        Box<dyn Error>,
+    > {
+        let Some(instance) = self.instance.as_ref() else {
+            return Err(
+                "cannot make khr::surface::Instance before Instance is inititalized".into(),
+            );
+        };
+        let s_instance = khr::surface::Instance::new(&self.entry, instance);
+        let surface_capabilities =
+            s_instance.get_physical_device_surface_capabilities(device, surface)?;
+        let surface_formats = s_instance.get_physical_device_surface_formats(device, surface)?;
+        let present_modes =
+            s_instance.get_physical_device_surface_present_modes(device, surface)?;
+        Ok((surface_capabilities, surface_formats, present_modes))
+    }
 }
 
 impl Drop for InstanceManager {
     fn drop(&mut self) {
-        if let Some(instance) = &self.instance.as_ref() {
+        if let Some(instance) = self.instance.as_ref() {
             unsafe {
                 instance.destroy_instance(None);
             }

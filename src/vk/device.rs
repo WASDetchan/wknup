@@ -76,7 +76,7 @@ pub struct DeviceManager {
     _queue_families: QueueFamilyIndicies,
     instance: Arc<InstanceManager>,
     device: Option<Device>,
-    queue: Queue,
+    queues: Queues,
 }
 impl DeviceManager {
     fn iterate_physical_devices(
@@ -133,22 +133,37 @@ impl DeviceManager {
         let physical_device = physical_device.1;
 
         qfi.fill(&instance, physical_device);
-        let queue_info = DeviceQueueCreateInfo::default()
+        let graphic_present_match = qfi.graphics.unwrap() == qfi.present.unwrap();
+        let graphic_info = DeviceQueueCreateInfo::default()
             .queue_family_index(qfi.graphics.unwrap() as u32)
             .queue_priorities(&[0.0f32]);
-        let queue_infos = vec![queue_info];
+        let present_info = DeviceQueueCreateInfo::default()
+            .queue_family_index(qfi.present.unwrap() as u32)
+            .queue_priorities(&[0.0f32]);
+        let queue_infos = if graphic_present_match {vec![graphic_info]}  else {vec![graphic_info, present_info]};
 
         let device_features = PhysicalDeviceFeatures::default();
+        let device_extensions = vec![
+            c"VK_KHR_SWAPCHAIN_EXTENSION".as_ptr(),
+        ];
         let device_info = DeviceCreateInfo::default()
             .queue_create_infos(&queue_infos)
-            .enabled_features(&device_features);
+            .enabled_features(&device_features)
+        .enabled_extension_names(&device_extensions);
         let device = instance.create_device(physical_device, &device_info)?;
-        let queue = unsafe { device.get_device_queue(qfi.graphics.unwrap() as u32, 0) };
+        let graphic_queue = unsafe { device.get_device_queue(qfi.graphics.unwrap() as u32, 0) };
+        let present_queue = unsafe {
+            device.get_device_queue(qfi.present.unwrap() as u32, if graphic_present_match {0} else {1})
+        };
+        let queues = Queues {
+            graphics: graphic_queue,
+            present: present_queue,
+        };
         Ok(Self {
             _physical_device: physical_device,
             _queue_families: qfi,
             device: Some(device),
-            queue,
+            queues,
             instance,
         })
     }

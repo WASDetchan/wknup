@@ -3,7 +3,7 @@ use ash::{
     vk::{self},
 };
 use core::fmt;
-use device::DeviceManager;
+use device::{DeviceManager, swapchain::SwapchainManager};
 use instance::InstanceManager;
 use std::{error::Error, sync::Arc};
 
@@ -19,6 +19,7 @@ enum VulkanInitStage {
     InstanceManager,
     Surface,
     Device,
+    Swapchain,
 }
 
 impl fmt::Display for VulkanInitStage {
@@ -32,6 +33,7 @@ impl fmt::Display for VulkanInitStage {
                 VulkanInitStage::InstanceManager => "InstanceManager",
                 VulkanInitStage::Surface => "Surface",
                 VulkanInitStage::Device => "Device",
+                VulkanInitStage::Swapchain => "Swapchain",
             }
         )
     }
@@ -58,7 +60,8 @@ pub struct VulkanManager {
     entry: Option<Arc<Entry>>,
     instance_manager: Option<Arc<InstanceManager>>,
     window_manager: Option<WindowManager>,
-    device_manager: Option<DeviceManager>,
+    device_manager: Option<Arc<DeviceManager>>,
+    swapchain_manager: Option<SwapchainManager>,
 }
 
 impl VulkanManager {
@@ -125,10 +128,40 @@ impl VulkanManager {
                 requiered_stage: VulkanInitStage::Surface,
             }));
         };
-        self.device_manager = Some(DeviceManager::init(
+        self.device_manager = Some(Arc::new(DeviceManager::init(
             self.instance_manager.clone().unwrap(),
             surface,
-        )?);
+        )?));
+        Ok(())
+    }
+
+    pub fn init_swapchain_manager(&mut self) -> Result<(), Box<dyn Error>> {
+        if self.device_manager.is_none() {
+            return Err(Box::new(VulkanInitOrderError {
+                attempted_stage: VulkanInitStage::Swapchain,
+                requiered_stage: VulkanInitStage::Device,
+            }));
+        }
+
+        let swapchain_manager =
+            SwapchainManager::new(self.device_manager.as_ref().unwrap().clone());
+        self.swapchain_manager = Some(swapchain_manager);
+        Ok(())
+    }
+
+    pub fn create_swapchain(&mut self) -> Result<(), Box<dyn Error>> {
+        if self.swapchain_manager.is_none() {
+            return Err("cannot create swapchain before SwapchainManager is initialized".into());
+        }
+        let surface = self.window_manager.as_ref().unwrap().surface().unwrap();
+        self.swapchain_manager.as_mut().unwrap().create_swapchain(
+            surface,
+            self.device_manager.as_ref().unwrap().get_surface_info()?,
+            self.device_manager
+                .as_ref()
+                .unwrap()
+                .get_queue_family_indices(),
+        )?;
         Ok(())
     }
     pub fn init() -> Result<Self, Box<dyn Error>> {
@@ -138,6 +171,8 @@ impl VulkanManager {
         vulkan_manager.init_instance()?;
         vulkan_manager.init_surface()?;
         vulkan_manager.init_device()?;
+        vulkan_manager.init_swapchain_manager()?;
+        vulkan_manager.create_swapchain()?;
         Ok(vulkan_manager)
     }
 }

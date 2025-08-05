@@ -4,13 +4,13 @@ use ash::{
     Device, Entry, Instance, khr,
     vk::{
         self, ApplicationInfo, DeviceCreateInfo, ExtensionProperties, PhysicalDevice,
-        QueueFamilyProperties, SurfaceKHR,
+        QueueFamilyProperties, SurfaceKHR, SwapchainCreateInfoKHR, SwapchainKHR,
     },
 };
 use sdl3::video::Window;
 
 use super::{
-    extensions::ExtensionManager, physical_device::PhysicalDeviceSurfaceInfo,
+    device::swapchain, extensions::ExtensionManager, physical_device::PhysicalDeviceSurfaceInfo,
     validation::ValidationLayerManager,
 };
 use crate::vk::device::PhysicalDeviceInfo;
@@ -187,6 +187,35 @@ impl InstanceManager {
                 present_modes,
             })
         }
+    }
+
+    pub unsafe fn create_swapchain(
+        &self,
+        device: &Device,
+        create_info: &SwapchainCreateInfoKHR,
+    ) -> Result<SwapchainKHR, Box<dyn Error>> {
+        let Some(instance) = self.instance.as_ref() else {
+            return Err(
+                "cannot make khr::swapchain::Device before Instance is inititalized".into(),
+            );
+        };
+        let loader = khr::swapchain::Device::new(instance, device);
+        let swapchain = unsafe { loader.create_swapchain(create_info, None)? };
+        Ok(swapchain)
+    }
+    pub unsafe fn destroy_swapchain(
+        &self,
+        device: &Device,
+        swapchain: SwapchainKHR,
+    ) -> Result<(), Box<dyn Error>> {
+        let Some(instance) = self.instance.as_ref() else {
+            return Err(
+                "cannot make khr::swapchain::Device before Instance is inititalized".into(),
+            );
+        };
+        let loader = khr::swapchain::Device::new(instance, device);
+        unsafe { loader.destroy_swapchain(swapchain, None) };
+        Ok(())
     }
 }
 

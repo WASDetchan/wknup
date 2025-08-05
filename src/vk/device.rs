@@ -7,14 +7,14 @@ use ash::{
     Device,
     vk::{
         DeviceCreateInfo, DeviceQueueCreateInfo, PhysicalDevice, PhysicalDeviceFeatures,
-        PhysicalDeviceProperties, Queue, SurfaceKHR,
+        PhysicalDeviceProperties, Queue, SurfaceKHR, SwapchainCreateInfoKHR, SwapchainKHR,
     },
 };
 use device_extensions::DeviceExtensionManager;
 
 use super::{
     instance::InstanceManager,
-    physical_device::{self, QueueFamilyIndices},
+    physical_device::{self, PhysicalDeviceSurfaceInfo, QueueFamilyIndices},
 };
 
 pub const REQUIRED_DEVICE_EXTENSIONS: [&CStr; 1] = [c"VK_KHR_swapchain"];
@@ -120,7 +120,38 @@ impl DeviceManager {
 
         Ok(device_manager)
     }
-    pub fn destroy_device(&mut self) {
+
+    pub fn create_swapchain(
+        &self,
+        create_info: &SwapchainCreateInfoKHR,
+    ) -> Result<SwapchainKHR, Box<dyn Error>> {
+        let Some(device) = self.device.as_ref() else {
+            return Err("cannot create swapchain before device is initialized".into());
+        };
+        unsafe { self.instance.create_swapchain(device, create_info) }
+    }
+
+    pub fn get_surface_info(&self) -> Result<PhysicalDeviceSurfaceInfo, Box<dyn Error>> {
+        if self.physical_device.is_none() {
+            return Err("cannot query surface info before physical_device is chosen".into());
+        }
+        physical_device::query_device_surface_info(
+            &self.instance,
+            self.physical_device.unwrap(),
+            self.surface,
+        )
+    }
+
+    pub fn get_queue_family_indices(&self) -> QueueFamilyIndices {
+        self.queue_family_indices.clone()
+    }
+
+    pub unsafe fn destroy_swapchain(&self, swapchain: SwapchainKHR) -> Result<(), Box<dyn Error>> {
+        self.instance
+            .destroy_swapchain(self.device.as_ref().unwrap(), swapchain)
+    }
+
+    fn destroy_device(&mut self) {
         if let Some(device) = self.device.as_ref() {
             unsafe { device.destroy_device(None) };
         }

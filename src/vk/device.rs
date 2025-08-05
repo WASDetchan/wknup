@@ -1,4 +1,5 @@
 pub mod device_extensions;
+pub mod swapchain;
 
 use std::{error::Error, ffi::CStr, sync::Arc};
 

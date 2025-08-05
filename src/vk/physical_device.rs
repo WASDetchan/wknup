@@ -6,7 +6,7 @@ use ash::vk::{
 };
 
 use super::{
-    device::{self, device_extensions},
+    device::{self, device_extensions, swapchain},
     instance::InstanceManager,
 };
 
@@ -32,7 +32,7 @@ fn filter_present_qf(
     }
 
     let surface_info = query_device_surface_info(instance, device, surface).unwrap();
-    if surface_info.formats.is_empty() || surface_info.present_modes.is_empty() {
+    if !swapchain::check_surface_info(surface_info) {
         return false;
     }
     true

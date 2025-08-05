@@ -16,7 +16,7 @@ use super::{
     physical_device::{self, QueueFamilyIndices},
 };
 
-const REQUIRED_DEVICE_EXTENSIONS: [&CStr; 1] = [c"VK_KHR_swapchain"];
+pub const REQUIRED_DEVICE_EXTENSIONS: [&CStr; 1] = [c"VK_KHR_swapchain"];
 struct Queues {
     graphics: Queue,
     present: Queue,

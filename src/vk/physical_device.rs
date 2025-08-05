@@ -16,6 +16,25 @@ pub struct QueueFamilyIndices {
     present_filter: QFFilter,
 }
 
+fn filter_present_qf(
+    instance: &Arc<InstanceManager>,
+    surface: SurfaceKHR,
+    device: PhysicalDevice,
+    id: usize,
+    _props: &QueueFamilyProperties,
+) -> bool {
+    let support = instance.get_physical_device_surface_support(device, id as u32, surface);
+    if !support.is_ok_and(|s| s) {
+        return false;
+    }
+    let surface_info = query_device_surface_info(instance, device, surface).unwrap();
+    true
+}
+
+fn filter_graphic_qf(_device: PhysicalDevice, _id: usize, props: &QueueFamilyProperties) -> bool {
+    props.queue_flags.contains(QueueFlags::GRAPHICS)
+}
+
 impl QueueFamilyIndices {
     fn new(graphics_filter: QFFilter, present_filter: QFFilter) -> Self {
         Self {
@@ -57,11 +76,9 @@ impl QueueFamilyIndices {
     }
     pub fn default(instance: Arc<InstanceManager>, surface_khr: SurfaceKHR) -> QueueFamilyIndices {
         QueueFamilyIndices::new(
-            Arc::new(move |_device, _id, props| props.queue_flags.contains(QueueFlags::GRAPHICS)),
-            Arc::new(move |device, id, _props| {
-                instance
-                    .get_physical_device_surface_support(device, id as u32, surface_khr)
-                    .unwrap_or(false)
+            Arc::new(move |device, id, props| filter_graphic_qf(device, id, props)),
+            Arc::new(move |device, id, props| {
+                filter_present_qf(&instance, surface_khr, device, id, props)
             }),
         )
     }
@@ -76,6 +93,9 @@ fn rate_physical_device(
     let props = info.properties;
     let features = info.features;
     qfi.fill(instance, device);
+    if qfi.is_complete() == false {
+        return 0;
+    }
     ((props.device_type == PhysicalDeviceType::DISCRETE_GPU
         || props.device_type == PhysicalDeviceType::INTEGRATED_GPU)
         && (features.geometry_shader == 1)
@@ -118,7 +138,7 @@ pub fn choose_physical_device(
 }
 
 pub fn query_device_surface_info(
-    instance: Arc<InstanceManager>,
+    instance: &Arc<InstanceManager>,
     device: PhysicalDevice,
     surface: SurfaceKHR,
 ) -> Result<PhysicalDeviceSurfaceInfo, Box<dyn Error>> {

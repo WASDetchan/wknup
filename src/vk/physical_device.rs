@@ -30,7 +30,11 @@ fn filter_present_qf(
     if !support.is_ok_and(|s| s) {
         return false;
     }
+
     let surface_info = query_device_surface_info(instance, device, surface).unwrap();
+    if surface_info.formats.is_empty() || surface_info.present_modes.is_empty() {
+        return false;
+    }
     true
 }
 
@@ -106,19 +110,20 @@ fn rate_physical_device(
         return 0;
     }
 
-    qfi.fill(instance, device);
-    if qfi.is_complete() == false {
-        return 0;
-    }
-
     if !device_extensions::check_extensions(instance, device, &device::REQUIRED_DEVICE_EXTENSIONS)
         .is_ok()
     {
         return 0;
     }
 
+    qfi.fill(instance, device);
+    if qfi.is_complete() == false {
+        return 0;
+    }
+
     return 1;
 }
+
 fn iterate_physical_devices(
     instance: &Arc<InstanceManager>,
 ) -> Result<IntoIter<PhysicalDevice>, Box<dyn Error>> {

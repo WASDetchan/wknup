@@ -152,7 +152,7 @@ impl InstanceManager {
         };
         Ok(unsafe { instance.create_device(physical_device, device_info, None) }?)
     }
-    pub unsafe fn enumerate_device_extension_properties(
+    pub fn enumerate_device_extension_properties(
         &self,
         device: PhysicalDevice,
     ) -> Result<Vec<ExtensionProperties>, Box<dyn Error>> {
@@ -173,20 +173,23 @@ impl InstanceManager {
             Vec<PresentModeKHR>,
         ),
         Box<dyn Error>,
-    > { unsafe {
-        let Some(instance) = self.instance.as_ref() else {
-            return Err(
-                "cannot make khr::surface::Instance before Instance is inititalized".into(),
-            );
-        };
-        let s_instance = khr::surface::Instance::new(&self.entry, instance);
-        let surface_capabilities =
-            s_instance.get_physical_device_surface_capabilities(device, surface)?;
-        let surface_formats = s_instance.get_physical_device_surface_formats(device, surface)?;
-        let present_modes =
-            s_instance.get_physical_device_surface_present_modes(device, surface)?;
-        Ok((surface_capabilities, surface_formats, present_modes))
-    }}
+    > {
+        unsafe {
+            let Some(instance) = self.instance.as_ref() else {
+                return Err(
+                    "cannot make khr::surface::Instance before Instance is inititalized".into(),
+                );
+            };
+            let s_instance = khr::surface::Instance::new(&self.entry, instance);
+            let surface_capabilities =
+                s_instance.get_physical_device_surface_capabilities(device, surface)?;
+            let surface_formats =
+                s_instance.get_physical_device_surface_formats(device, surface)?;
+            let present_modes =
+                s_instance.get_physical_device_surface_present_modes(device, surface)?;
+            Ok((surface_capabilities, surface_formats, present_modes))
+        }
+    }
 }
 
 impl Drop for InstanceManager {

@@ -5,8 +5,8 @@ use std::{error::Error, ffi::CStr, sync::Arc};
 use ash::{
     Device,
     vk::{
-        DeviceCreateInfo, DeviceQueueCreateInfo, ExtensionProperties, PhysicalDevice,
-        PhysicalDeviceFeatures, PhysicalDeviceProperties, Queue, SurfaceKHR,
+        DeviceCreateInfo, DeviceQueueCreateInfo, PhysicalDevice, PhysicalDeviceFeatures,
+        PhysicalDeviceProperties, Queue, SurfaceKHR,
     },
 };
 use device_extensions::DeviceExtensionManager;
@@ -56,6 +56,9 @@ impl DeviceManager {
     }
 
     fn init_device(&mut self) -> Result<(), Box<dyn Error>> {
+        if self.physical_device.is_none() {
+            return Err("cannot init device before physical_device is inited".into());
+        }
         let qfi = &self.queue_family_indices;
 
         let graphic_present_match = qfi.graphics.unwrap() == qfi.present.unwrap();
@@ -75,8 +78,8 @@ impl DeviceManager {
 
         let device_features = PhysicalDeviceFeatures::default();
 
-        let mut device_extension_manager = DeviceExtensionManager::init(self)?;
-
+        let mut device_extension_manager =
+            DeviceExtensionManager::init(&self.instance, self.physical_device.unwrap())?;
         device_extension_manager.add_extensions(&REQUIRED_DEVICE_EXTENSIONS)?;
         let ext_names = device_extension_manager.list_names();
 
@@ -129,20 +132,6 @@ impl DeviceManager {
         if let Some(device) = self.device.as_ref() {
             unsafe { device.destroy_device(None) };
         }
-    }
-    pub fn enumerate_self_device_extension_properties(
-        &self,
-    ) -> Result<Vec<ExtensionProperties>, Box<dyn Error>> {
-        let Some(physical_device) = self.physical_device else {
-            return Err("cannot enumerate_device_extension_properties before physical device is initialized".into());
-        };
-        unsafe { self.enumerate_device_extension_properties(physical_device) }
-    }
-    pub unsafe fn enumerate_device_extension_properties(
-        &self,
-        device: PhysicalDevice,
-    ) -> Result<Vec<ExtensionProperties>, Box<dyn Error>> {
-        unsafe { self.instance.enumerate_device_extension_properties(device) }
     }
 }
 impl Drop for DeviceManager {

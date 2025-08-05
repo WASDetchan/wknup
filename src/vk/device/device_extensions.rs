@@ -4,9 +4,12 @@ use std::{
     ffi::{CStr, CString},
     fmt,
     os::raw::c_char,
+    sync::Arc,
 };
 
-use super::DeviceManager;
+use ash::vk::PhysicalDevice;
+
+use crate::vk::instance::InstanceManager;
 
 #[derive(Debug)]
 pub struct DeviceExtensionUnavailableError {
@@ -39,9 +42,12 @@ pub struct DeviceExtensionManager {
 }
 
 impl DeviceExtensionManager {
-    pub fn init(device: &DeviceManager) -> Result<Self, Box<dyn Error>> {
-        let available = device
-            .enumerate_self_device_extension_properties()?
+    pub fn init(
+        instance: &Arc<InstanceManager>,
+        device: PhysicalDevice,
+    ) -> Result<Self, Box<dyn Error>> {
+        let available = instance
+            .enumerate_device_extension_properties(device)?
             .into_iter()
             .map(|ext| ext.extension_name_as_c_str().unwrap().to_owned())
             .collect::<HashSet<CString>>();
@@ -50,19 +56,39 @@ impl DeviceExtensionManager {
             enabled: HashSet::new(),
         })
     }
-    pub fn add_extensions<T: AsRef<CStr>>(
-        &mut self,
+    pub fn check_extensions<T: AsRef<CStr>>(
+        &self,
         extensions: &[T],
     ) -> Result<(), DeviceExtensionUnavailableError> {
         for ext in extensions {
             if self.available.get(ext.as_ref()) == None {
                 return Err(ext.as_ref().into());
             }
+        }
+        Ok(())
+    }
+    pub fn add_extensions<T: AsRef<CStr>>(
+        &mut self,
+        extensions: &[T],
+    ) -> Result<(), DeviceExtensionUnavailableError> {
+        self.check_extensions(extensions)?;
+        for ext in extensions {
             self.enabled.insert(ext.as_ref().to_owned());
         }
+
         Ok(())
     }
     pub fn list_names(&self) -> Vec<*const c_char> {
         self.enabled.iter().map(|ext| ext.as_ptr()).collect()
     }
+}
+
+fn check_extensions<T: AsRef<CStr>>(
+    instance: &Arc<InstanceManager>,
+    device: PhysicalDevice,
+    extensions: &[T],
+) -> Result<(), Box<dyn Error>> {
+    let manager = DeviceExtensionManager::init(instance, device)?;
+    manager.check_extensions(extensions)?;
+    Ok(())
 }

@@ -1,13 +1,12 @@
 mod device_extensions;
 
-use std::{error::Error, ffi::CStr, sync::Arc, vec::IntoIter};
+use std::{error::Error, ffi::CStr, sync::Arc};
 
 use ash::{
     Device,
     vk::{
         DeviceCreateInfo, DeviceQueueCreateInfo, ExtensionProperties, PhysicalDevice,
-        PhysicalDeviceFeatures, PhysicalDeviceProperties, PhysicalDeviceType, Queue,
-        QueueFamilyProperties, QueueFlags, SurfaceKHR,
+        PhysicalDeviceFeatures, PhysicalDeviceProperties, Queue, SurfaceKHR,
     },
 };
 use device_extensions::DeviceExtensionManager;

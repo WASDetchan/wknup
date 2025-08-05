@@ -5,7 +5,7 @@ use ash::{
     vk::{
         self, ApplicationInfo, DeviceCreateInfo, ExtensionProperties, PhysicalDevice,
         PresentModeKHR, QueueFamilyProperties, SurfaceCapabilitiesKHR, SurfaceFormatKHR,
-        SurfaceKHR, SurfacePresentModeEXT,
+        SurfaceKHR,
     },
 };
 use sdl3::video::Window;
@@ -173,7 +173,7 @@ impl InstanceManager {
             Vec<PresentModeKHR>,
         ),
         Box<dyn Error>,
-    > {
+    > { unsafe {
         let Some(instance) = self.instance.as_ref() else {
             return Err(
                 "cannot make khr::surface::Instance before Instance is inititalized".into(),
@@ -186,7 +186,7 @@ impl InstanceManager {
         let present_modes =
             s_instance.get_physical_device_surface_present_modes(device, surface)?;
         Ok((surface_capabilities, surface_formats, present_modes))
-    }
+    }}
 }
 
 impl Drop for InstanceManager {

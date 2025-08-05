@@ -2,7 +2,7 @@ use std::{error::Error, sync::Arc, vec::IntoIter};
 
 use ash::vk::{PhysicalDevice, PhysicalDeviceType, QueueFamilyProperties, QueueFlags, SurfaceKHR};
 
-use super::instance::{self, InstanceManager};
+use super::instance::InstanceManager;
 
 type QFFilter = Arc<dyn Fn(PhysicalDevice, usize, &QueueFamilyProperties) -> bool>;
 #[derive(Clone)]

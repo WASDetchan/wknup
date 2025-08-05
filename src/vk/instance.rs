@@ -4,13 +4,15 @@ use ash::{
     Device, Entry, Instance, khr,
     vk::{
         self, ApplicationInfo, DeviceCreateInfo, ExtensionProperties, PhysicalDevice,
-        PresentModeKHR, QueueFamilyProperties, SurfaceCapabilitiesKHR, SurfaceFormatKHR,
-        SurfaceKHR,
+        QueueFamilyProperties, SurfaceKHR,
     },
 };
 use sdl3::video::Window;
 
-use super::{extensions::ExtensionManager, validation::ValidationLayerManager};
+use super::{
+    extensions::ExtensionManager, physical_device::PhysicalDeviceSurfaceInfo,
+    validation::ValidationLayerManager,
+};
 use crate::vk::device::PhysicalDeviceInfo;
 pub struct InstanceManager {
     instance: Option<Instance>,
@@ -162,18 +164,11 @@ impl InstanceManager {
 
         Ok(unsafe { instance.enumerate_device_extension_properties(device)? })
     }
-    pub unsafe fn get_physical_device_surface_info(
+    pub fn get_physical_device_surface_info(
         &self,
         device: PhysicalDevice,
         surface: SurfaceKHR,
-    ) -> Result<
-        (
-            SurfaceCapabilitiesKHR,
-            Vec<SurfaceFormatKHR>,
-            Vec<PresentModeKHR>,
-        ),
-        Box<dyn Error>,
-    > {
+    ) -> Result<PhysicalDeviceSurfaceInfo, Box<dyn Error>> {
         unsafe {
             let Some(instance) = self.instance.as_ref() else {
                 return Err(
@@ -181,13 +176,16 @@ impl InstanceManager {
                 );
             };
             let s_instance = khr::surface::Instance::new(&self.entry, instance);
-            let surface_capabilities =
+            let capabilities =
                 s_instance.get_physical_device_surface_capabilities(device, surface)?;
-            let surface_formats =
-                s_instance.get_physical_device_surface_formats(device, surface)?;
+            let formats = s_instance.get_physical_device_surface_formats(device, surface)?;
             let present_modes =
                 s_instance.get_physical_device_surface_present_modes(device, surface)?;
-            Ok((surface_capabilities, surface_formats, present_modes))
+            Ok(PhysicalDeviceSurfaceInfo {
+                capabilities,
+                formats,
+                present_modes,
+            })
         }
     }
 }

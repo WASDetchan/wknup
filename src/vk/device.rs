@@ -108,15 +108,6 @@ impl DeviceManager {
         self.queues = Some(queues);
     }
 
-    fn query_swapchain_support(&self, device: PhysicalDevice) -> Result<(), Box<dyn Error>> {
-        unsafe {
-            let (surface_capabilities, surface_formats, present_modes) = self
-                .instance
-                .get_physical_device_surface_info(device, self.surface)?;
-        }
-        Ok(())
-    }
-
     pub fn init(
         instance: Arc<InstanceManager>,
         surface_khr: SurfaceKHR,

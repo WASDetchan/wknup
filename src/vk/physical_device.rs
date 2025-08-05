@@ -1,6 +1,9 @@
 use std::{error::Error, sync::Arc, vec::IntoIter};
 
-use ash::vk::{PhysicalDevice, PhysicalDeviceType, QueueFamilyProperties, QueueFlags, SurfaceKHR};
+use ash::vk::{
+    PhysicalDevice, PhysicalDeviceType, PresentModeKHR, QueueFamilyProperties, QueueFlags,
+    SurfaceCapabilitiesKHR, SurfaceFormatKHR, SurfaceKHR,
+};
 
 use super::instance::InstanceManager;
 
@@ -112,4 +115,18 @@ pub fn choose_physical_device(
         device: physical_device,
         queue_family_indices,
     })
+}
+
+pub fn query_device_surface_info(
+    instance: Arc<InstanceManager>,
+    device: PhysicalDevice,
+    surface: SurfaceKHR,
+) -> Result<PhysicalDeviceSurfaceInfo, Box<dyn Error>> {
+    instance.get_physical_device_surface_info(device, surface)
+}
+
+pub struct PhysicalDeviceSurfaceInfo {
+    pub capabilities: SurfaceCapabilitiesKHR,
+    pub formats: Vec<SurfaceFormatKHR>,
+    pub present_modes: Vec<PresentModeKHR>,
 }

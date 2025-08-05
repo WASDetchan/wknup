@@ -83,7 +83,7 @@ impl DeviceExtensionManager {
     }
 }
 
-fn check_extensions<T: AsRef<CStr>>(
+pub fn check_extensions<T: AsRef<CStr>>(
     instance: &Arc<InstanceManager>,
     device: PhysicalDevice,
     extensions: &[T],

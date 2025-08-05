@@ -5,7 +5,10 @@ use ash::vk::{
     SurfaceCapabilitiesKHR, SurfaceFormatKHR, SurfaceKHR,
 };
 
-use super::instance::InstanceManager;
+use super::{
+    device::{self, device_extensions},
+    instance::InstanceManager,
+};
 
 type QFFilter = Arc<dyn Fn(PhysicalDevice, usize, &QueueFamilyProperties) -> bool>;
 #[derive(Clone)]
@@ -92,14 +95,29 @@ fn rate_physical_device(
     let info = instance.get_physical_device_info(device).unwrap();
     let props = info.properties;
     let features = info.features;
+
+    if !(props.device_type == PhysicalDeviceType::DISCRETE_GPU
+        || props.device_type == PhysicalDeviceType::INTEGRATED_GPU)
+    {
+        return 0;
+    }
+
+    if !(features.geometry_shader == 1) {
+        return 0;
+    }
+
     qfi.fill(instance, device);
     if qfi.is_complete() == false {
         return 0;
     }
-    ((props.device_type == PhysicalDeviceType::DISCRETE_GPU
-        || props.device_type == PhysicalDeviceType::INTEGRATED_GPU)
-        && (features.geometry_shader == 1)
-        && qfi.is_complete()) as i32
+
+    if !device_extensions::check_extensions(instance, device, &device::REQUIRED_DEVICE_EXTENSIONS)
+        .is_ok()
+    {
+        return 0;
+    }
+
+    return 1;
 }
 fn iterate_physical_devices(
     instance: &Arc<InstanceManager>,

@@ -1,4 +1,4 @@
-mod device_extensions;
+pub mod device_extensions;
 
 use std::{error::Error, ffi::CStr, sync::Arc};
 

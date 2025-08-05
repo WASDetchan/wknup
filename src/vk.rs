@@ -10,6 +10,7 @@ use std::{error::Error, sync::Arc};
 use crate::window::WindowManager;
 
 pub mod instance;
+pub mod physical_device;
 
 #[derive(Debug)]
 enum VulkanInitStage {

@@ -12,63 +12,15 @@ use ash::{
 };
 use device_extensions::DeviceExtensionManager;
 
-use super::instance::InstanceManager;
+use super::{
+    instance::InstanceManager,
+    physical_device::{self, QueueFamilyIndices},
+};
 
 const REQUIRED_DEVICE_EXTENSIONS: [&CStr; 1] = [c"VK_KHR_swapchain"];
-
-type QFFilter = Arc<dyn Fn(PhysicalDevice, usize, &QueueFamilyProperties) -> bool>;
-#[derive(Clone)]
-struct QueueFamilyIndicies {
-    graphics: Option<usize>,
-    present: Option<usize>,
-    graphics_filter: QFFilter,
-    present_filter: QFFilter,
-}
-
 struct Queues {
     graphics: Queue,
     present: Queue,
-}
-
-impl QueueFamilyIndicies {
-    fn new(graphics_filter: QFFilter, present_filter: QFFilter) -> Self {
-        Self {
-            graphics: None,
-            present: None,
-            graphics_filter,
-            present_filter,
-        }
-    }
-    fn try_queue(
-        &mut self,
-        physical_device: PhysicalDevice,
-        id: usize,
-        props: &QueueFamilyProperties,
-    ) {
-        if (self.graphics_filter)(physical_device, id, props) {
-            self.graphics = Some(id);
-        };
-        if (self.present_filter)(physical_device, id, props) {
-            self.present = Some(id);
-        }
-    }
-    fn fill(&mut self, instance: &Arc<InstanceManager>, physical_device: PhysicalDevice) {
-        Self::iterate_physical_device_queue_families(instance, physical_device)
-            .enumerate()
-            .for_each(|(id, prop)| self.try_queue(physical_device, id, &prop));
-    }
-    fn is_complete(&self) -> bool {
-        self.graphics.is_some() && self.present.is_some()
-    }
-    fn iterate_physical_device_queue_families(
-        instance: &Arc<InstanceManager>,
-        physical_device: PhysicalDevice,
-    ) -> IntoIter<QueueFamilyProperties> {
-        instance
-            .get_physical_device_queue_family_properties(physical_device)
-            .unwrap()
-            .into_iter()
-    }
 }
 
 pub struct PhysicalDeviceInfo {
@@ -78,7 +30,7 @@ pub struct PhysicalDeviceInfo {
 
 pub struct DeviceManager {
     physical_device: Option<PhysicalDevice>,
-    queue_families: QueueFamilyIndicies,
+    queue_family_indices: QueueFamilyIndices,
     instance: Arc<InstanceManager>,
     device: Option<Device>,
     queues: Option<Queues>,
@@ -88,68 +40,24 @@ impl DeviceManager {
     fn new(instance: Arc<InstanceManager>, surface: SurfaceKHR) -> Self {
         Self {
             physical_device: None,
-            queue_families: Self::make_qfi(instance.clone(), surface),
+            queue_family_indices: QueueFamilyIndices::default(instance.clone(), surface),
             instance,
             device: None,
             queues: None,
             surface,
         }
     }
-    fn iterate_physical_devices(
-        instance: &Arc<InstanceManager>,
-    ) -> Result<IntoIter<PhysicalDevice>, Box<dyn Error>> {
-        Ok(instance.enumerate_physical_devices()?.into_iter())
-    }
-
-    fn rate_physical_device(
-        instance: &Arc<InstanceManager>,
-        device: PhysicalDevice,
-        mut qfi: QueueFamilyIndicies,
-    ) -> i32 {
-        let info = instance.get_physical_device_info(device).unwrap();
-        let props = info.properties;
-        let features = info.features;
-        qfi.fill(instance, device);
-        ((props.device_type == PhysicalDeviceType::DISCRETE_GPU
-            || props.device_type == PhysicalDeviceType::INTEGRATED_GPU)
-            && (features.geometry_shader == 1)
-            && qfi.is_complete()) as i32
-    }
 
     fn init_physical_device(&mut self) -> Result<(), Box<dyn Error>> {
-        let physical_device = Self::iterate_physical_devices(&self.instance)?
-            .map(|pdev| {
-                (
-                    Self::rate_physical_device(&self.instance, pdev, self.queue_families.clone()),
-                    pdev,
-                )
-            })
-            .max_by_key(|s| s.0);
-        let Some(physical_device) = physical_device else {
-            return Err("No physical device found.".into());
-        };
-        if physical_device.0 <= 0 {
-            return Err("No suitable physical device found.".into());
-        }
-        self.physical_device = Some(physical_device.1);
-        self.queue_families
-            .fill(&self.instance, self.physical_device.unwrap());
+        let qfi = self.queue_family_indices.clone();
+        let chosen = physical_device::choose_physical_device(&self.instance, qfi)?;
+        self.queue_family_indices = chosen.queue_family_indices;
+        self.physical_device = Some(chosen.device);
         Ok(())
     }
 
-    fn make_qfi(instance: Arc<InstanceManager>, surface_khr: SurfaceKHR) -> QueueFamilyIndicies {
-        QueueFamilyIndicies::new(
-            Arc::new(move |_device, _id, props| props.queue_flags.contains(QueueFlags::GRAPHICS)),
-            Arc::new(move |device, id, _props| {
-                instance
-                    .get_physical_device_surface_support(device, id as u32, surface_khr)
-                    .unwrap_or(false)
-            }),
-        )
-    }
-
     fn init_device(&mut self) -> Result<(), Box<dyn Error>> {
-        let qfi = &self.queue_families;
+        let qfi = &self.queue_family_indices;
 
         let graphic_present_match = qfi.graphics.unwrap() == qfi.present.unwrap();
 
@@ -185,7 +93,7 @@ impl DeviceManager {
     }
 
     fn init_queues(&mut self) {
-        let qfi = &self.queue_families;
+        let qfi = &self.queue_family_indices;
         let device = self.device.as_ref().unwrap();
 
         let graphic_queue = unsafe { device.get_device_queue(qfi.graphics.unwrap() as u32, 0) };
@@ -223,16 +131,19 @@ impl DeviceManager {
             unsafe { device.destroy_device(None) };
         }
     }
-    pub fn enumerate_device_extension_properties(
+    pub fn enumerate_self_device_extension_properties(
         &self,
     ) -> Result<Vec<ExtensionProperties>, Box<dyn Error>> {
         let Some(physical_device) = self.physical_device else {
             return Err("cannot enumerate_device_extension_properties before physical device is initialized".into());
         };
-        unsafe {
-            self.instance
-                .enumerate_device_extension_properties(physical_device)
-        }
+        unsafe { self.enumerate_device_extension_properties(physical_device) }
+    }
+    pub unsafe fn enumerate_device_extension_properties(
+        &self,
+        device: PhysicalDevice,
+    ) -> Result<Vec<ExtensionProperties>, Box<dyn Error>> {
+        unsafe { self.instance.enumerate_device_extension_properties(device) }
     }
 }
 impl Drop for DeviceManager {

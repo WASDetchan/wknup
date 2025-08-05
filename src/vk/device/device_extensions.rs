@@ -41,7 +41,7 @@ pub struct DeviceExtensionManager {
 impl DeviceExtensionManager {
     pub fn init(device: &DeviceManager) -> Result<Self, Box<dyn Error>> {
         let available = device
-            .enumerate_device_extension_properties()?
+            .enumerate_self_device_extension_properties()?
             .into_iter()
             .map(|ext| ext.extension_name_as_c_str().unwrap().to_owned())
             .collect::<HashSet<CString>>();
@@ -64,17 +64,5 @@ impl DeviceExtensionManager {
     }
     pub fn list_names(&self) -> Vec<*const c_char> {
         self.enabled.iter().map(|ext| ext.as_ptr()).collect()
-    }
-
-    fn check_support<T: AsRef<CStr>>(
-        device: PhysicalDevice,
-        extensions: &[T],
-    ) -> Result<(), DeviceExtensionUnavailableError> {
-        for ext in extensions {
-            if self.available.get(ext.as_ref()) == None {
-                return Err(ext.as_ref().into());
-            }
-            self.enabled.insert(ext.as_ref().to_owned());
-        }
     }
 }

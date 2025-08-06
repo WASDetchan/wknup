@@ -93,7 +93,7 @@ impl VulkanManager {
 
         let wm_required_extensions = window_manager.get_vk_extensions()?;
 
-        let mut instance_manager = InstanceManager::init(entry)?
+        let mut instance_manager = InstanceManager::init(entry)
             .extensions(wm_required_extensions)
             .validation_layers(vec![String::from("VK_LAYER_KHRONOS_validation")])
             .application_props(String::from("WKNUP"), 1)

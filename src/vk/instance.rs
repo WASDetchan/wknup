@@ -27,10 +27,10 @@ pub struct InstanceManager {
 }
 
 impl InstanceManager {
-    pub fn init(entry: Arc<Entry>) -> Result<Self, Box<dyn Error>> {
-        let extension_manager = ExtensionManager::init(&entry)?;
-        let validation_manager = ValidationLayerManager::init(&entry)?;
-        Ok(Self {
+    pub fn init(entry: Arc<Entry>) -> Self {
+        let extension_manager = ExtensionManager::init(&entry);
+        let validation_manager = ValidationLayerManager::init(&entry);
+        Self {
             instance: None,
             extensions: Vec::new(),
             layers: Vec::new(),
@@ -40,7 +40,7 @@ impl InstanceManager {
             api_version: vk::make_api_version(0, 1, 0, 0),
             apllication_props: (String::new(), 0),
             engine_props: (String::new(), 0),
-        })
+        }
     }
     pub fn extensions(mut self, extensions: Vec<String>) -> Self {
         self.extensions = extensions;
@@ -66,10 +66,10 @@ impl InstanceManager {
 
     pub fn init_instance(&mut self) -> Result<(), Box<dyn Error>> {
         self.extension_manager.add_extensions(&self.extensions)?;
-        let extension_names = self.extension_manager.make_load_extension_list()?;
+        let extension_names = self.extension_manager.make_load_extension_list();
 
         self.validation_manager.add_layers(&self.layers)?;
-        let layer_names = self.validation_manager.make_load_layer_list()?;
+        let layer_names = self.validation_manager.make_load_layer_list();
 
         let app_name = CString::new(self.apllication_props.0.clone())?;
         let engine_name = CString::new(self.engine_props.0.clone())?;

@@ -1,84 +1,109 @@
 use std::{
     error::Error,
-    ffi::{CString, c_char},
+    ffi::{CStr, CString, c_char},
+    fmt,
 };
 
-use ash::Entry;
+use ash::{Entry, prelude::VkResult, vk};
+
+#[derive(Debug)]
+pub struct InstanceExtensionUnavailableError {
+    extension: CString,
+}
+
+impl From<&CStr> for InstanceExtensionUnavailableError {
+    fn from(s: &CStr) -> Self {
+        return Self {
+            extension: s.to_owned(),
+        };
+    }
+}
+
+impl fmt::Display for InstanceExtensionUnavailableError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "instance extension {} is not available",
+            self.extension.to_str().unwrap()
+        )
+    }
+}
+
+impl Error for InstanceExtensionUnavailableError {}
 
 #[derive(Default)]
 struct Extension {
     name: CString,
     enabled: bool,
 }
-#[derive(Default)]
 pub struct ExtensionManager {
-    available: Option<Vec<Extension>>,
+    available: Vec<Extension>,
 }
 
 impl ExtensionManager {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn init(entry: &Entry) -> Result<Self, Box<dyn Error>> {
-        let mut s = Self::new();
-        s.enumerate(entry)?;
-        Ok(s)
-    }
-    pub fn enumerate(&mut self, entry: &Entry) -> Result<(), Box<dyn Error>> {
-        if self.available.is_none() {
-            self.available = Some(
-                unsafe { entry.enumerate_instance_extension_properties(None)? }
-                    .into_iter()
-                    .map(|ext| Extension {
-                        name: ext.extension_name_as_c_str().unwrap().into(),
-                        enabled: false,
-                    })
-                    .collect(),
-            );
+    pub fn init(entry: &Entry) -> Self {
+        Self {
+            available: Self::enumerate(entry).unwrap_or_else(|e| match e {
+                vk::Result::ERROR_OUT_OF_HOST_MEMORY => {
+                    panic!("failed to enumerate_instance_extension_properties: out of host memory")
+                }
+                vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => panic!(
+                    "failed to enumerate_instance_extension_properties: out of device memory"
+                ),
+                _ => unreachable!("all possible error cases have been covered"),
+            }),
         }
-        Ok(())
     }
-    pub fn check_extensions(&self, extensions: &[String]) -> Result<(), Box<dyn Error>> {
-        let Some(available) = &self.available else {
-            return Err("Extensions were not enumerated before checking.".into());
-        };
+    fn enumerate(entry: &Entry) -> VkResult<Vec<Extension>> {
+        Ok(
+            unsafe { entry.enumerate_instance_extension_properties(None)? }
+                .into_iter()
+                .map(|ext| Extension {
+                    name: ext.extension_name_as_c_str().unwrap().into(),
+                    enabled: false,
+                })
+                .collect(),
+        )
+    }
+    pub fn check_extensions(
+        &self,
+        extensions: &[String],
+    ) -> Result<(), InstanceExtensionUnavailableError> {
         for ext in extensions.iter() {
-            if !available
+            if !self
+                .available
                 .iter()
                 .any(|a_ext| a_ext.name.to_str().unwrap() == ext.as_str())
             {
-                return Err(format!("Extension not found: {ext}.").into());
+                return Err(InstanceExtensionUnavailableError::from(
+                    CString::new(ext.clone()).unwrap().as_c_str(),
+                ));
             }
         }
         Ok(())
     }
 
-    pub fn add_extensions(&mut self, extensions: &[String]) -> Result<(), Box<dyn Error>> {
+    pub fn add_extensions(
+        &mut self,
+        extensions: &[String],
+    ) -> Result<(), InstanceExtensionUnavailableError> {
         self.check_extensions(extensions)?;
-        let available = (self.available).as_mut().unwrap().iter_mut();
-        for a_ext in available {
-            if extensions.contains(&a_ext.name.to_str()?.to_owned()) {
+        for a_ext in self.available.iter_mut() {
+            if extensions.contains(&a_ext.name.to_str().unwrap().to_owned()) {
                 a_ext.enabled = true;
             }
         }
         Ok(())
     }
 
-    pub fn make_load_extension_list(&mut self) -> Result<Vec<*const c_char>, Box<dyn Error>> {
-        if self.available.is_none() {
-            return Err("Extensions were not enumerated before loading.".into());
-        };
-
+    pub fn make_load_extension_list(&mut self) -> Vec<*const c_char> {
         let to_load = self
             .available
-            .as_ref()
-            .unwrap()
             .iter()
             .filter(|e| e.enabled)
             .map(|e| e.name.as_ptr())
             .collect();
 
-        Ok(to_load)
+        to_load
     }
 }

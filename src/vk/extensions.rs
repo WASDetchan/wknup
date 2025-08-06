@@ -30,10 +30,10 @@ impl ExtensionManager {
         Self {
             available: Self::enumerate(entry).unwrap_or_else(|e| match e {
                 vk::Result::ERROR_OUT_OF_HOST_MEMORY => {
-                    panic!("failed to enumerate_instance_extension_properties: out of host memory")
+                    panic!("fatal: failed to enumerate_instance_extension_properties: a host memory allocation has failed")
                 }
                 vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => panic!(
-                    "failed to enumerate_instance_extension_properties: out of device memory"
+                    "fatal: failed to enumerate_instance_extension_properties: a device memory allocation has failed"
                 ),
                 _ => unreachable!("all possible error cases have been covered"),
             }),

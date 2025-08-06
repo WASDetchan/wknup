@@ -1,4 +1,8 @@
-use std::{error::Error, ffi::CString, sync::Arc};
+use std::{
+    error::Error,
+    ffi::{CString, NulError},
+    sync::Arc,
+};
 
 use ash::{
     Device, Entry, Instance, khr,
@@ -10,10 +14,23 @@ use ash::{
 use sdl3::video::Window;
 
 use super::{
-    extensions::ExtensionManager, physical_device::PhysicalDeviceSurfaceInfo,
-    validation::ValidationLayerManager,
+    VulkanInitStage, VulkanInitStageError,
+    extensions::{ExtensionManager, InstanceExtensionUnavailableError},
+    physical_device::PhysicalDeviceSurfaceInfo,
+    validation::{ValidationLayerManager, ValidationLayerUnavailableError},
 };
 use crate::vk::device::PhysicalDeviceInfo;
+
+#[derive(Debug, thiserror::Error)]
+pub enum InstanceInitError {
+    #[error("could not init instance: {0}")]
+    ExtensionUnavailable(#[from] InstanceExtensionUnavailableError),
+    #[error("could not init instance: {0}")]
+    ValidatiobLayerUnavailable(#[from] ValidationLayerUnavailableError),
+    #[error("could not init instance: {0}")]
+    InvalidName(#[from] NulError),
+}
+
 pub struct InstanceManager {
     instance: Option<Instance>,
     extensions: Vec<String>,
@@ -64,7 +81,7 @@ impl InstanceManager {
         self
     }
 
-    pub fn init_instance(&mut self) -> Result<(), Box<dyn Error>> {
+    pub fn init_instance(&mut self) -> Result<(), InstanceInitError> {
         self.extension_manager.add_extensions(&self.extensions)?;
         let extension_names = self.extension_manager.make_load_extension_list();
 
@@ -83,42 +100,55 @@ impl InstanceManager {
             .application_info(&application_info)
             .enabled_extension_names(&extension_names)
             .enabled_layer_names(&layer_names);
-        let instance = unsafe { self.entry.create_instance(&create_info, None) }?;
+        let instance =
+            unsafe { self.entry.create_instance(&create_info, None) }.unwrap_or_else(|e| match e {
+                vk::Result::ERROR_INCOMPATIBLE_DRIVER => {
+                    panic!("fatal: failed to create_instance: unable to find a Vulkan driver")
+                }
+                vk::Result::ERROR_OUT_OF_HOST_MEMORY => {
+                    panic!("fatal: failed to create_instance: a host memory allocation has failed")
+                }
+                vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => {
+                    panic!(
+                        "fatal: failed to create_instance: a device memory allocation has failed"
+                    )
+                }
+                _ => unreachable!("all possible error cases have been covered"),
+            });
         self.instance = Some(instance);
         Ok(())
+    }
+
+    fn require_instance(&self) -> Result<&Instance, VulkanInitStageError> {
+        let Some(instance) = self.instance.as_ref() else {
+            return Err(VulkanInitStageError::new(VulkanInitStage::Instance));
+        };
+        Ok(instance)
     }
 
     ///
     /// # Safety
     /// Extension instance should not be used after InstanceManager is dropped
     ///
-    pub unsafe fn make_surface_instance(&self) -> Result<khr::surface::Instance, Box<dyn Error>> {
-        let Some(instance) = self.instance.as_ref() else {
-            return Err(
-                "cannot make khr::surface::Instance before Instance is inititalized".into(),
-            );
-        };
+    pub unsafe fn make_surface_instance(
+        &self,
+    ) -> Result<khr::surface::Instance, VulkanInitStageError> {
+        let instance = self.require_instance()?;
         Ok(khr::surface::Instance::new(&self.entry, instance))
     }
     pub fn create_surface(&self, window: &Window) -> Result<SurfaceKHR, Box<dyn Error>> {
-        let Some(instance) = self.instance.as_ref() else {
-            return Err("cannot create surface before instance is initialized".into());
-        };
+        let instance = self.require_instance()?;
         Ok(window.vulkan_create_surface(instance.handle())?)
     }
     pub fn enumerate_physical_devices(&self) -> Result<Vec<PhysicalDevice>, Box<dyn Error>> {
-        let Some(instance) = self.instance.as_ref() else {
-            return Err("instance was not initialized before enumerating physical devices".into());
-        };
+        let instance = self.require_instance()?;
         Ok(unsafe { instance.enumerate_physical_devices() }?)
     }
     pub fn get_physical_device_info(
         &self,
         device: PhysicalDevice,
-    ) -> Result<PhysicalDeviceInfo, Box<dyn Error>> {
-        let Some(instance) = self.instance.as_ref() else {
-            return Err("instance was not initialized before getting physical device info".into());
-        };
+    ) -> Result<PhysicalDeviceInfo, VulkanInitStageError> {
+        let instance = self.require_instance()?;
         Ok(PhysicalDeviceInfo {
             properties: unsafe { instance.get_physical_device_properties(device) },
             features: unsafe { instance.get_physical_device_features(device) },
@@ -127,10 +157,8 @@ impl InstanceManager {
     pub fn get_physical_device_queue_family_properties(
         &self,
         physical_device: PhysicalDevice,
-    ) -> Result<Vec<QueueFamilyProperties>, Box<dyn Error>> {
-        let Some(instance) = self.instance.as_ref() else {
-            return Err("instance was not initialized before getting physical device info".into());
-        };
+    ) -> Result<Vec<QueueFamilyProperties>, VulkanInitStageError> {
+        let instance = self.require_instance()?;
         Ok(unsafe { instance.get_physical_device_queue_family_properties(physical_device) })
     }
     pub fn get_physical_device_surface_support(
@@ -139,9 +167,7 @@ impl InstanceManager {
         id: u32,
         surface: SurfaceKHR,
     ) -> Result<bool, Box<dyn Error>> {
-        let Some(instance) = self.instance.as_ref() else {
-            return Err("instance was not initialized before getting physical device info".into());
-        };
+        let instance = self.require_instance()?;
         let s_instance = khr::surface::Instance::new(&self.entry, instance);
         Ok(unsafe { s_instance.get_physical_device_surface_support(device, id, surface) }?)
     }
@@ -150,19 +176,14 @@ impl InstanceManager {
         physical_device: PhysicalDevice,
         device_info: &DeviceCreateInfo,
     ) -> Result<Device, Box<dyn Error>> {
-        let Some(instance) = self.instance.as_ref() else {
-            return Err("instance was not initialized before creating device".into());
-        };
+        let instance = self.require_instance()?;
         Ok(unsafe { instance.create_device(physical_device, device_info, None) }?)
     }
     pub fn enumerate_device_extension_properties(
         &self,
         device: PhysicalDevice,
     ) -> Result<Vec<ExtensionProperties>, Box<dyn Error>> {
-        let Some(instance) = self.instance.as_ref() else {
-            return Err("instance was not initialized before getting device info".into());
-        };
-
+        let instance = self.require_instance()?;
         Ok(unsafe { instance.enumerate_device_extension_properties(device)? })
     }
     pub fn get_physical_device_surface_info(
@@ -171,11 +192,7 @@ impl InstanceManager {
         surface: SurfaceKHR,
     ) -> Result<PhysicalDeviceSurfaceInfo, Box<dyn Error>> {
         unsafe {
-            let Some(instance) = self.instance.as_ref() else {
-                return Err(
-                    "cannot make khr::surface::Instance before Instance is inititalized".into(),
-                );
-            };
+            let instance = self.require_instance()?;
             let s_instance = khr::surface::Instance::new(&self.entry, instance);
             let capabilities =
                 s_instance.get_physical_device_surface_capabilities(device, surface)?;
@@ -199,11 +216,7 @@ impl InstanceManager {
         device: &Device,
         create_info: &SwapchainCreateInfoKHR,
     ) -> Result<SwapchainKHR, Box<dyn Error>> {
-        let Some(instance) = self.instance.as_ref() else {
-            return Err(
-                "cannot make khr::swapchain::Device before Instance is inititalized".into(),
-            );
-        };
+        let instance = self.require_instance()?;
         let loader = khr::swapchain::Device::new(instance, device);
         let swapchain = unsafe { loader.create_swapchain(create_info, None)? };
         Ok(swapchain)
@@ -214,12 +227,7 @@ impl InstanceManager {
         device: &Device,
         swapchain: SwapchainKHR,
     ) -> Result<Vec<vk::Image>, Box<dyn Error>> {
-        let Some(instance) = self.instance.as_ref() else {
-            return Err(
-                "cannot make khr::swapchain::Device before Instance is inititalized".into(),
-            );
-        };
-
+        let instance = self.require_instance()?;
         let loader = khr::swapchain::Device::new(instance, device);
         let images = unsafe { loader.get_swapchain_images(swapchain)? };
         Ok(images)
@@ -234,11 +242,7 @@ impl InstanceManager {
         device: &Device,
         swapchain: SwapchainKHR,
     ) -> Result<(), Box<dyn Error>> {
-        let Some(instance) = self.instance.as_ref() else {
-            return Err(
-                "cannot make khr::swapchain::Device before Instance is inititalized".into(),
-            );
-        };
+        let instance = self.require_instance()?;
         let loader = khr::swapchain::Device::new(instance, device);
         unsafe { loader.destroy_swapchain(swapchain, None) };
         Ok(())

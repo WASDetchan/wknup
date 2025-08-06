@@ -23,11 +23,11 @@ use crate::vk::device::PhysicalDeviceInfo;
 
 #[derive(Debug, thiserror::Error)]
 pub enum InstanceInitError {
-    #[error("could not init instance: {0}")]
+    #[error("failed to init instance: {0}")]
     ExtensionUnavailable(#[from] InstanceExtensionUnavailableError),
-    #[error("could not init instance: {0}")]
+    #[error("failed to init instance: {0}")]
     ValidatiobLayerUnavailable(#[from] ValidationLayerUnavailableError),
-    #[error("could not init instance: {0}")]
+    #[error("failed to init instance: {0}")]
     InvalidName(#[from] NulError),
 }
 

@@ -36,7 +36,7 @@ impl WindowManager {
         Ok(surface)
     }
 
-    pub fn get_vk_extensions(&self) -> Result<Vec<String>, Box<dyn Error>> {
-        Ok(self.window.vulkan_instance_extensions()?)
+    pub fn get_vk_extensions(&self) -> Result<Vec<String>, sdl3::Error> {
+        self.window.vulkan_instance_extensions()
     }
 }

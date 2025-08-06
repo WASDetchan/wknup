@@ -14,7 +14,7 @@ pub mod physical_device;
 pub mod surface;
 
 #[derive(Debug, strum::Display)]
-enum VulkanInitStage {
+pub enum VulkanInitStage {
     Entry,
     Instance,
     Surface,
@@ -24,8 +24,8 @@ enum VulkanInitStage {
 
 #[derive(Debug, thiserror::Error)]
 #[error("{requiered_stage} must be initialized")]
-struct VulkanInitStageError {
-    requiered_stage: VulkanInitStage,
+pub struct VulkanInitStageError {
+    pub requiered_stage: VulkanInitStage,
 }
 
 impl VulkanInitStageError {

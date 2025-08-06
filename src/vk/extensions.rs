@@ -13,9 +13,9 @@ pub struct InstanceExtensionUnavailableError {
 
 impl From<&CStr> for InstanceExtensionUnavailableError {
     fn from(s: &CStr) -> Self {
-        return Self {
+        Self {
             extension: s.to_owned(),
-        };
+        }
     }
 }
 
@@ -97,13 +97,13 @@ impl ExtensionManager {
     }
 
     pub fn make_load_extension_list(&mut self) -> Vec<*const c_char> {
-        let to_load = self
+        
+
+        self
             .available
             .iter()
             .filter(|e| e.enabled)
             .map(|e| e.name.as_ptr())
-            .collect();
-
-        to_load
+            .collect()
     }
 }

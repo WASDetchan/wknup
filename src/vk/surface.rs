@@ -28,6 +28,10 @@ impl SurfaceManager {
         })
     }
 
+    ///
+    /// # Safety
+    /// SurfaceKHR should not be destroyed via raw handle
+    ///
     pub unsafe fn raw_handle(&self) -> SurfaceKHR {
         self.surface
     }

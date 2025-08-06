@@ -18,9 +18,9 @@ pub struct DeviceExtensionUnavailableError {
 
 impl From<&CStr> for DeviceExtensionUnavailableError {
     fn from(s: &CStr) -> Self {
-        return Self {
+        Self {
             extension: s.to_owned(),
-        };
+        }
     }
 }
 
@@ -61,7 +61,7 @@ impl DeviceExtensionManager {
         extensions: &[T],
     ) -> Result<(), DeviceExtensionUnavailableError> {
         for ext in extensions {
-            if self.available.get(ext.as_ref()) == None {
+            if !self.available.contains(ext.as_ref()) {
                 return Err(ext.as_ref().into());
             }
         }

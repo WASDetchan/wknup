@@ -17,9 +17,9 @@ pub struct ValidationLayerUnavailableError {
 
 impl From<&CStr> for ValidationLayerUnavailableError {
     fn from(s: &CStr) -> Self {
-        return Self {
+        Self {
             layer: s.to_owned(),
-        };
+        }
     }
 }
 
@@ -95,14 +95,14 @@ impl ValidationLayerManager {
     }
 
     pub fn make_load_layer_list(&self) -> Vec<*const c_char> {
-        let to_load = self
+        
+
+        self
             .available
             .iter()
             .filter(|e| e.enabled)
             .map(|e| e.name.as_ptr())
-            .collect();
-
-        to_load
+            .collect()
     }
 }
 

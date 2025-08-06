@@ -88,6 +88,10 @@ impl InstanceManager {
         Ok(())
     }
 
+    ///
+    /// # Safety
+    /// Extension instance should not be used after InstanceManager is dropped
+    ///
     pub unsafe fn make_surface_instance(&self) -> Result<khr::surface::Instance, Box<dyn Error>> {
         let Some(instance) = self.instance.as_ref() else {
             return Err(
@@ -186,6 +190,10 @@ impl InstanceManager {
         }
     }
 
+    ///
+    /// # Safety
+    /// device should be valid
+    ///
     pub unsafe fn create_swapchain(
         &self,
         device: &Device,
@@ -200,6 +208,11 @@ impl InstanceManager {
         let swapchain = unsafe { loader.create_swapchain(create_info, None)? };
         Ok(swapchain)
     }
+    ///
+    /// # Safety
+    /// device and swapchain should be valid
+    /// swapchain will not be valid after call
+    ///
     pub unsafe fn destroy_swapchain(
         &self,
         device: &Device,

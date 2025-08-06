@@ -23,23 +23,12 @@ pub fn check_surface_info(surface_info: PhysicalDeviceSurfaceInfo) -> bool {
 }
 
 fn choose_format(formats: Vec<SurfaceFormatKHR>) -> Option<SurfaceFormatKHR> {
-    for format in formats {
-        if format.format == Format::B8G8R8A8_SRGB
-            && format.color_space == ColorSpaceKHR::SRGB_NONLINEAR
-        {
-            return Some(format);
-        }
-    }
-    None
+    formats.into_iter().find(|&format| format.format == Format::B8G8R8A8_SRGB
+            && format.color_space == ColorSpaceKHR::SRGB_NONLINEAR)
 }
 
 fn choose_present_mode(modes: Vec<PresentModeKHR>) -> Option<PresentModeKHR> {
-    for mode in modes {
-        if mode == PresentModeKHR::FIFO {
-            return Some(mode);
-        }
-    }
-    None
+    modes.into_iter().find(|&mode| mode == PresentModeKHR::FIFO)
 }
 
 fn choose_swap_extent(capabilities: SurfaceCapabilitiesKHR) -> Extent2D {

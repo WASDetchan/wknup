@@ -83,7 +83,7 @@ impl QueueFamilyIndices {
     }
     pub fn default(instance: Arc<InstanceManager>, surface_khr: SurfaceKHR) -> QueueFamilyIndices {
         QueueFamilyIndices::new(
-            Arc::new(move |device, id, props| filter_graphic_qf(device, id, props)),
+            Arc::new(filter_graphic_qf),
             Arc::new(move |device, id, props| {
                 filter_present_qf(&instance, surface_khr, device, id, props)
             }),
@@ -106,22 +106,21 @@ fn rate_physical_device(
         return 0;
     }
 
-    if !(features.geometry_shader == 1) {
+    if features.geometry_shader != 1 {
         return 0;
     }
 
-    if !device_extensions::check_extensions(instance, device, &device::REQUIRED_DEVICE_EXTENSIONS)
-        .is_ok()
+    if device_extensions::check_extensions(instance, device, &device::REQUIRED_DEVICE_EXTENSIONS).is_err()
     {
         return 0;
     }
 
     qfi.fill(instance, device);
-    if qfi.is_complete() == false {
+    if !qfi.is_complete() {
         return 0;
     }
 
-    return 1;
+    1
 }
 
 fn iterate_physical_devices(

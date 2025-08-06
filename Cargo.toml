@@ -7,4 +7,6 @@ edition = "2024"
 ash = {version = "0.38", features = ["linked"]}
 tokio = { version = "1", features = ["full"] }
 sdl3 = {version = "0.14", features = ["ash"]}
+strum = { version = "0.27", features = ["derive"] }
+thiserror = "2.0"
 # sdl3-sys = {version = "0.5", features = ["use-ash-v0-38"]}

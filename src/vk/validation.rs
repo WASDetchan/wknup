@@ -1,8 +1,4 @@
-use std::{
-    error::Error,
-    ffi::{CStr, CString, c_char},
-    fmt,
-};
+use std::ffi::{CStr, CString, c_char};
 
 use ash::{
     Entry,
@@ -10,7 +6,8 @@ use ash::{
     vk::{self},
 };
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
+#[error("validation layer {} is not available", self.layer.to_str().unwrap())]
 pub struct ValidationLayerUnavailableError {
     layer: CString,
 }
@@ -22,18 +19,6 @@ impl From<&CStr> for ValidationLayerUnavailableError {
         }
     }
 }
-
-impl fmt::Display for ValidationLayerUnavailableError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "validation layer {} is not available",
-            self.layer.to_str().unwrap()
-        )
-    }
-}
-
-impl Error for ValidationLayerUnavailableError {}
 
 struct ValidationLayer {
     name: CString,
@@ -95,10 +80,7 @@ impl ValidationLayerManager {
     }
 
     pub fn make_load_layer_list(&self) -> Vec<*const c_char> {
-        
-
-        self
-            .available
+        self.available
             .iter()
             .filter(|e| e.enabled)
             .map(|e| e.name.as_ptr())

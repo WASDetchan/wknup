@@ -1,12 +1,9 @@
-use std::{
-    error::Error,
-    ffi::{CStr, CString, c_char},
-    fmt,
-};
+use std::ffi::{CStr, CString, c_char};
 
 use ash::{Entry, prelude::VkResult, vk};
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
+#[error("instance extension {} is not available", self.extension.to_str().unwrap())]
 pub struct InstanceExtensionUnavailableError {
     extension: CString,
 }
@@ -18,18 +15,6 @@ impl From<&CStr> for InstanceExtensionUnavailableError {
         }
     }
 }
-
-impl fmt::Display for InstanceExtensionUnavailableError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "instance extension {} is not available",
-            self.extension.to_str().unwrap()
-        )
-    }
-}
-
-impl Error for InstanceExtensionUnavailableError {}
 
 #[derive(Default)]
 struct Extension {
@@ -97,10 +82,7 @@ impl ExtensionManager {
     }
 
     pub fn make_load_extension_list(&mut self) -> Vec<*const c_char> {
-        
-
-        self
-            .available
+        self.available
             .iter()
             .filter(|e| e.enabled)
             .map(|e| e.name.as_ptr())

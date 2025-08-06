@@ -2,10 +2,7 @@ use crate::vk::instance::InstanceManager;
 use std::{error::Error, sync::Arc};
 
 use ash::vk::SurfaceKHR;
-use sdl3::{
-    self, Sdl, VideoSubsystem,
-    video::{VkSurfaceKHR, Window},
-};
+use sdl3::{self, Sdl, VideoSubsystem, video::Window};
 
 pub struct WindowManager {
     _sdl_context: Sdl,

@@ -75,7 +75,7 @@ impl VulkanManager {
         self.entry = Some(Arc::new(Entry::linked()));
     }
     fn init_window_manager(&mut self) {
-        self.window_manager = Some(WindowManager::init());
+        self.window_manager = Some(Arc::new(WindowManager::init()));
     }
     fn init_instance(&mut self) -> Result<(), Box<dyn Error>> {
         let Some(entry) = self.entry.clone() else {
@@ -118,10 +118,10 @@ impl VulkanManager {
                 requiered_stage: VulkanInitStage::Window,
             }));
         };
-        self.surface_manager = Arc::new(SurfaceManager::init(
+        self.surface_manager = Some(Arc::new(SurfaceManager::init(
             self.instance_manager.clone().unwrap(),
             self.window_manager.clone().unwrap(),
-        )?);
+        )?));
         Ok(())
     }
     fn init_device(&mut self) -> Result<(), Box<dyn Error>> {
@@ -171,7 +171,6 @@ impl VulkanManager {
             return Err("cannot create swapchain before SwapchainManager is initialized".into());
         }
         self.swapchain_manager.as_mut().unwrap().create_swapchain(
-            surface,
             self.device_manager.as_ref().unwrap().get_surface_info()?,
             self.device_manager
                 .as_ref()

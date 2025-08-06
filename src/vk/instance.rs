@@ -10,7 +10,7 @@ use ash::{
 use sdl3::video::Window;
 
 use super::{
-    device::swapchain, extensions::ExtensionManager, physical_device::PhysicalDeviceSurfaceInfo,
+    extensions::ExtensionManager, physical_device::PhysicalDeviceSurfaceInfo,
     validation::ValidationLayerManager,
 };
 use crate::vk::device::PhysicalDeviceInfo;

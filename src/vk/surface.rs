@@ -4,12 +4,12 @@ use ash::{khr, vk::SurfaceKHR};
 
 use crate::window::WindowManager;
 
-use super::instance::{self, InstanceManager};
+use super::instance::InstanceManager;
 
 pub struct SurfaceManager {
-    instance: Arc<InstanceManager>,
+    _instance: Arc<InstanceManager>,
     surface_instance: khr::surface::Instance,
-    window: Arc<WindowManager>,
+    _window: Arc<WindowManager>,
     surface: SurfaceKHR,
 }
 
@@ -21,11 +21,15 @@ impl SurfaceManager {
         let surface = window.create_surface(&instance)?;
         let surface_instance = unsafe { instance.make_surface_instance() }?;
         Ok(Self {
-            instance,
+            _instance: instance,
             surface_instance,
-            window,
+            _window: window,
             surface,
         })
+    }
+
+    pub unsafe fn raw_handle(&self) -> SurfaceKHR {
+        self.surface
     }
 }
 

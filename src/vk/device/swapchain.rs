@@ -2,7 +2,7 @@ use std::{error::Error, sync::Arc};
 
 use ash::vk::{
     ColorSpaceKHR, CompositeAlphaFlagsKHR, Extent2D, Format, ImageUsageFlags, PresentModeKHR,
-    SharingMode, SurfaceCapabilitiesKHR, SurfaceFormatKHR, SurfaceKHR, SurfaceTransformFlagsKHR,
+    SharingMode, SurfaceCapabilitiesKHR, SurfaceFormatKHR, SurfaceTransformFlagsKHR,
     SwapchainCreateInfoKHR, SwapchainKHR,
 };
 
@@ -78,7 +78,6 @@ impl SwapchainManager {
     }
     pub fn create_swapchain(
         &mut self,
-        surface: SurfaceKHR,
         surface_info: PhysicalDeviceSurfaceInfo,
         queue_family_indices: QueueFamilyIndices,
     ) -> Result<(), Box<dyn Error>> {
@@ -89,7 +88,7 @@ impl SwapchainManager {
         let capabilities = surface_info.capabilities;
         let format = choose_format(surface_info.formats).unwrap();
         let mut swapchain_info = SwapchainCreateInfoKHR::default()
-            .surface(surface)
+            .surface(unsafe { self.surface.raw_handle() })
             .min_image_count(choose_image_count(capabilities))
             .image_format(format.format)
             .image_color_space(format.color_space)

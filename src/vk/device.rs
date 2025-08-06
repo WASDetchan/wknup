@@ -7,7 +7,7 @@ use ash::{
     Device,
     vk::{
         DeviceCreateInfo, DeviceQueueCreateInfo, PhysicalDevice, PhysicalDeviceFeatures,
-        PhysicalDeviceProperties, Queue, SurfaceKHR, SwapchainCreateInfoKHR, SwapchainKHR,
+        PhysicalDeviceProperties, Queue, SwapchainCreateInfoKHR, SwapchainKHR,
     },
 };
 use device_extensions::DeviceExtensionManager;
@@ -15,6 +15,7 @@ use device_extensions::DeviceExtensionManager;
 use super::{
     instance::InstanceManager,
     physical_device::{self, PhysicalDeviceSurfaceInfo, QueueFamilyIndices},
+    surface::SurfaceManager,
 };
 
 pub const REQUIRED_DEVICE_EXTENSIONS: [&CStr; 1] = [c"VK_KHR_swapchain"];
@@ -34,13 +35,15 @@ pub struct DeviceManager {
     instance: Arc<InstanceManager>,
     device: Option<Device>,
     queues: Option<Queues>,
-    surface: SurfaceKHR,
+    surface: Arc<SurfaceManager>,
 }
 impl DeviceManager {
-    fn new(instance: Arc<InstanceManager>, surface: SurfaceKHR) -> Self {
+    fn new(instance: Arc<InstanceManager>, surface: Arc<SurfaceManager>) -> Self {
         Self {
             physical_device: None,
-            queue_family_indices: QueueFamilyIndices::default(instance.clone(), surface),
+            queue_family_indices: QueueFamilyIndices::default(instance.clone(), unsafe {
+                surface.raw_handle()
+            }),
             instance,
             device: None,
             queues: None,
@@ -111,9 +114,9 @@ impl DeviceManager {
 
     pub fn init(
         instance: Arc<InstanceManager>,
-        surface_khr: SurfaceKHR,
+        surface: Arc<SurfaceManager>,
     ) -> Result<Self, Box<dyn Error>> {
-        let mut device_manager = Self::new(instance, surface_khr);
+        let mut device_manager = Self::new(instance, surface);
         device_manager.init_physical_device()?;
         device_manager.init_device()?;
         device_manager.init_queues();
@@ -138,7 +141,7 @@ impl DeviceManager {
         physical_device::query_device_surface_info(
             &self.instance,
             self.physical_device.unwrap(),
-            self.surface,
+            unsafe { self.surface.raw_handle() },
         )
     }
 
@@ -147,8 +150,10 @@ impl DeviceManager {
     }
 
     pub unsafe fn destroy_swapchain(&self, swapchain: SwapchainKHR) -> Result<(), Box<dyn Error>> {
-        self.instance
-            .destroy_swapchain(self.device.as_ref().unwrap(), swapchain)
+        unsafe {
+            self.instance
+                .destroy_swapchain(self.device.as_ref().unwrap(), swapchain)
+        }
     }
 
     fn destroy_device(&mut self) {

@@ -9,21 +9,19 @@ use super::instance::InstanceManager;
 pub struct SurfaceManager {
     _instance: Arc<InstanceManager>,
     surface_instance: khr::surface::Instance,
-    _window: Arc<WindowManager>,
     surface: SurfaceKHR,
 }
 
 impl SurfaceManager {
     pub fn init(
         instance: Arc<InstanceManager>,
-        window: Arc<WindowManager>,
+        window: &WindowManager,
     ) -> Result<Self, Box<dyn Error>> {
         let surface = window.create_surface(&instance)?;
         let surface_instance = unsafe { instance.make_surface_instance() }?;
         Ok(Self {
             _instance: instance,
             surface_instance,
-            _window: window,
             surface,
         })
     }

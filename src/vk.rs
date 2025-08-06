@@ -17,7 +17,6 @@ pub mod surface;
 #[derive(Debug)]
 enum VulkanInitStage {
     Entry,
-    Window,
     Instance,
     Surface,
     Device,
@@ -31,7 +30,6 @@ impl fmt::Display for VulkanInitStage {
             "{}",
             match self {
                 VulkanInitStage::Entry => "Entry",
-                VulkanInitStage::Window => "Window",
                 VulkanInitStage::Instance => "Instance",
                 VulkanInitStage::Surface => "Surface",
                 VulkanInitStage::Device => "Device",
@@ -60,7 +58,6 @@ impl Error for VulkanInitOrderError {}
 #[derive(Default)]
 pub struct VulkanManager {
     entry: Option<Arc<Entry>>,
-    window_manager: Option<Arc<WindowManager>>,
     instance_manager: Option<Arc<InstanceManager>>,
     surface_manager: Option<Arc<SurfaceManager>>,
     device_manager: Option<Arc<DeviceManager>>,
@@ -74,24 +71,16 @@ impl VulkanManager {
     fn init_entry(&mut self) {
         self.entry = Some(Arc::new(Entry::linked()));
     }
-    fn init_window_manager(&mut self) {
-        self.window_manager = Some(Arc::new(WindowManager::init()));
-    }
-    fn init_instance(&mut self) -> Result<(), Box<dyn Error>> {
+
+    fn init_instance(&mut self, window: &WindowManager) -> Result<(), Box<dyn Error>> {
         let Some(entry) = self.entry.clone() else {
             return Err(Box::new(VulkanInitOrderError {
                 attempted_stage: VulkanInitStage::Instance,
                 requiered_stage: VulkanInitStage::Entry,
             }));
         };
-        let Some(window_manager) = self.window_manager.as_ref() else {
-            return Err(Box::new(VulkanInitOrderError {
-                attempted_stage: VulkanInitStage::Instance,
-                requiered_stage: VulkanInitStage::Window,
-            }));
-        };
 
-        let wm_required_extensions = window_manager.get_vk_extensions()?;
+        let wm_required_extensions = window.get_vk_extensions()?;
 
         let mut instance_manager = InstanceManager::init(entry)
             .extensions(wm_required_extensions)
@@ -105,22 +94,16 @@ impl VulkanManager {
         Ok(())
     }
 
-    fn init_surface(&mut self) -> Result<(), Box<dyn Error>> {
+    fn init_surface(&mut self, window: &WindowManager) -> Result<(), Box<dyn Error>> {
         if self.instance_manager.is_none() {
             return Err(Box::new(VulkanInitOrderError {
                 attempted_stage: VulkanInitStage::Surface,
                 requiered_stage: VulkanInitStage::Instance,
             }));
         };
-        if self.window_manager.is_none() {
-            return Err(Box::new(VulkanInitOrderError {
-                attempted_stage: VulkanInitStage::Surface,
-                requiered_stage: VulkanInitStage::Window,
-            }));
-        };
         self.surface_manager = Some(Arc::new(SurfaceManager::init(
             self.instance_manager.clone().unwrap(),
-            self.window_manager.clone().unwrap(),
+            window,
         )?));
         Ok(())
     }
@@ -179,12 +162,11 @@ impl VulkanManager {
         )?;
         Ok(())
     }
-    pub fn init() -> Result<Self, Box<dyn Error>> {
+    pub fn init(window: &WindowManager) -> Result<Self, Box<dyn Error>> {
         let mut vulkan_manager = Self::default();
         vulkan_manager.init_entry();
-        vulkan_manager.init_window_manager();
-        vulkan_manager.init_instance()?;
-        vulkan_manager.init_surface()?;
+        vulkan_manager.init_instance(window)?;
+        vulkan_manager.init_surface(window)?;
         vulkan_manager.init_device()?;
         vulkan_manager.init_swapchain_manager()?;
         vulkan_manager.create_swapchain()?;

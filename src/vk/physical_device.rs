@@ -10,7 +10,7 @@ use super::{
     instance::InstanceManager,
 };
 
-type QFFilter = Arc<dyn Fn(PhysicalDevice, usize, &QueueFamilyProperties) -> bool>;
+type QFFilter = Arc<dyn Fn(PhysicalDevice, usize, &QueueFamilyProperties) -> bool + Send + Sync>;
 #[derive(Clone)]
 pub struct QueueFamilyIndices {
     pub graphics: Option<usize>,
@@ -110,7 +110,8 @@ fn rate_physical_device(
         return 0;
     }
 
-    if device_extensions::check_extensions(instance, device, &device::REQUIRED_DEVICE_EXTENSIONS).is_err()
+    if device_extensions::check_extensions(instance, device, &device::REQUIRED_DEVICE_EXTENSIONS)
+        .is_err()
     {
         return 0;
     }

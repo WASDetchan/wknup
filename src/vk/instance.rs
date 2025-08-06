@@ -87,23 +87,20 @@ impl InstanceManager {
         self.instance = Some(instance);
         Ok(())
     }
-    pub fn create_surface(&self, window: &Window) -> Result<SurfaceKHR, Box<dyn Error>> {
-        let Some(instance) = self.instance.as_ref() else {
-            return Err("cannot create surface before instance is initialized".into());
-        };
-        Ok(window.vulkan_create_surface(instance.handle())?)
-    }
-    pub fn destroy_surface(&self, surface: SurfaceKHR) -> Result<(), Box<dyn Error>> {
+
+    pub unsafe fn make_surface_instance(&self) -> Result<khr::surface::Instance, Box<dyn Error>> {
         let Some(instance) = self.instance.as_ref() else {
             return Err(
                 "cannot make khr::surface::Instance before Instance is inititalized".into(),
             );
         };
-        let s_instance = khr::surface::Instance::new(&self.entry, instance);
-        unsafe {
-            s_instance.destroy_surface(surface, None);
-        }
-        Ok(())
+        Ok(khr::surface::Instance::new(&self.entry, instance))
+    }
+    pub fn create_surface(&self, window: &Window) -> Result<SurfaceKHR, Box<dyn Error>> {
+        let Some(instance) = self.instance.as_ref() else {
+            return Err("cannot create surface before instance is initialized".into());
+        };
+        Ok(window.vulkan_create_surface(instance.handle())?)
     }
     pub fn enumerate_physical_devices(&self) -> Result<Vec<PhysicalDevice>, Box<dyn Error>> {
         let Some(instance) = self.instance.as_ref() else {

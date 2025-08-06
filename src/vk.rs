@@ -6,17 +6,19 @@ use core::fmt;
 use device::{DeviceManager, swapchain::SwapchainManager};
 use instance::InstanceManager;
 use std::{error::Error, sync::Arc};
+use surface::SurfaceManager;
 
 use crate::window::WindowManager;
 
 pub mod instance;
 pub mod physical_device;
+pub mod surface;
 
 #[derive(Debug)]
 enum VulkanInitStage {
     Entry,
-    WindowManager,
-    InstanceManager,
+    Window,
+    Instance,
     Surface,
     Device,
     Swapchain,
@@ -29,8 +31,8 @@ impl fmt::Display for VulkanInitStage {
             "{}",
             match self {
                 VulkanInitStage::Entry => "Entry",
-                VulkanInitStage::WindowManager => "WindowManager",
-                VulkanInitStage::InstanceManager => "InstanceManager",
+                VulkanInitStage::Window => "Window",
+                VulkanInitStage::Instance => "Instance",
                 VulkanInitStage::Surface => "Surface",
                 VulkanInitStage::Device => "Device",
                 VulkanInitStage::Swapchain => "Swapchain",
@@ -58,8 +60,9 @@ impl Error for VulkanInitOrderError {}
 #[derive(Default)]
 pub struct VulkanManager {
     entry: Option<Arc<Entry>>,
+    window_manager: Option<Arc<WindowManager>>,
     instance_manager: Option<Arc<InstanceManager>>,
-    window_manager: Option<WindowManager>,
+    surface_manager: Option<Arc<SurfaceManager>>,
     device_manager: Option<Arc<DeviceManager>>,
     swapchain_manager: Option<SwapchainManager>,
 }
@@ -77,14 +80,14 @@ impl VulkanManager {
     fn init_instance(&mut self) -> Result<(), Box<dyn Error>> {
         let Some(entry) = self.entry.clone() else {
             return Err(Box::new(VulkanInitOrderError {
-                attempted_stage: VulkanInitStage::InstanceManager,
+                attempted_stage: VulkanInitStage::Instance,
                 requiered_stage: VulkanInitStage::Entry,
             }));
         };
         let Some(window_manager) = self.window_manager.as_ref() else {
             return Err(Box::new(VulkanInitOrderError {
-                attempted_stage: VulkanInitStage::InstanceManager,
-                requiered_stage: VulkanInitStage::WindowManager,
+                attempted_stage: VulkanInitStage::Instance,
+                requiered_stage: VulkanInitStage::Window,
             }));
         };
 
@@ -106,23 +109,29 @@ impl VulkanManager {
         if self.instance_manager.is_none() {
             return Err(Box::new(VulkanInitOrderError {
                 attempted_stage: VulkanInitStage::Surface,
-                requiered_stage: VulkanInitStage::InstanceManager,
+                requiered_stage: VulkanInitStage::Instance,
             }));
         };
-        self.window_manager
-            .as_mut()
-            .expect("window_manager is always initialized at this point")
-            .init_surface(Arc::clone(self.instance_manager.as_ref().unwrap()))?;
+        if self.window_manager.is_none() {
+            return Err(Box::new(VulkanInitOrderError {
+                attempted_stage: VulkanInitStage::Surface,
+                requiered_stage: VulkanInitStage::Window,
+            }));
+        };
+        self.surface_manager = Arc::new(SurfaceManager::init(
+            self.instance_manager.clone().unwrap(),
+            self.window_manager.clone().unwrap(),
+        )?);
         Ok(())
     }
     fn init_device(&mut self) -> Result<(), Box<dyn Error>> {
         if self.instance_manager.is_none() {
             return Err(Box::new(VulkanInitOrderError {
                 attempted_stage: VulkanInitStage::Device,
-                requiered_stage: VulkanInitStage::InstanceManager,
+                requiered_stage: VulkanInitStage::Instance,
             }));
         }
-        let Some(surface) = self.window_manager.as_ref().unwrap().surface() else {
+        if self.surface_manager.is_none() {
             return Err(Box::new(VulkanInitOrderError {
                 attempted_stage: VulkanInitStage::Device,
                 requiered_stage: VulkanInitStage::Surface,
@@ -130,7 +139,7 @@ impl VulkanManager {
         };
         self.device_manager = Some(Arc::new(DeviceManager::init(
             self.instance_manager.clone().unwrap(),
-            surface,
+            self.surface_manager.clone().unwrap(),
         )?));
         Ok(())
     }
@@ -142,9 +151,17 @@ impl VulkanManager {
                 requiered_stage: VulkanInitStage::Device,
             }));
         }
+        if self.surface_manager.is_none() {
+            return Err(Box::new(VulkanInitOrderError {
+                attempted_stage: VulkanInitStage::Swapchain,
+                requiered_stage: VulkanInitStage::Surface,
+            }));
+        }
 
-        let swapchain_manager =
-            SwapchainManager::new(self.device_manager.as_ref().unwrap().clone());
+        let swapchain_manager = SwapchainManager::new(
+            self.device_manager.clone().unwrap(),
+            self.surface_manager.clone().unwrap(),
+        );
         self.swapchain_manager = Some(swapchain_manager);
         Ok(())
     }
@@ -153,7 +170,6 @@ impl VulkanManager {
         if self.swapchain_manager.is_none() {
             return Err("cannot create swapchain before SwapchainManager is initialized".into());
         }
-        let surface = self.window_manager.as_ref().unwrap().surface().unwrap();
         self.swapchain_manager.as_mut().unwrap().create_swapchain(
             surface,
             self.device_manager.as_ref().unwrap().get_surface_info()?,

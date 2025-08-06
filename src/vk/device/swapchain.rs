@@ -6,7 +6,10 @@ use ash::vk::{
     SwapchainCreateInfoKHR, SwapchainKHR,
 };
 
-use crate::vk::physical_device::{PhysicalDeviceSurfaceInfo, QueueFamilyIndices};
+use crate::vk::{
+    physical_device::{PhysicalDeviceSurfaceInfo, QueueFamilyIndices},
+    surface::SurfaceManager,
+};
 
 use super::DeviceManager;
 
@@ -62,13 +65,15 @@ fn choose_transform(capabilities: SurfaceCapabilitiesKHR) -> SurfaceTransformFla
 pub struct SwapchainManager {
     swapchain: Option<SwapchainKHR>,
     device: Arc<DeviceManager>,
+    surface: Arc<SurfaceManager>,
 }
 
 impl SwapchainManager {
-    pub fn new(device: Arc<DeviceManager>) -> Self {
+    pub fn new(device: Arc<DeviceManager>, surface: Arc<SurfaceManager>) -> Self {
         Self {
             swapchain: None,
             device,
+            surface,
         }
     }
     pub fn create_swapchain(

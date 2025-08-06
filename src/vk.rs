@@ -39,21 +39,16 @@ impl fmt::Display for VulkanInitStage {
     }
 }
 #[derive(Debug)]
-struct VulkanInitOrderError {
-    attempted_stage: VulkanInitStage,
+struct VulkanInitStageError {
     requiered_stage: VulkanInitStage,
 }
-impl fmt::Display for VulkanInitOrderError {
+impl fmt::Display for VulkanInitStageError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "unable to initialize {} before {} is initalized",
-            self.attempted_stage, self.requiered_stage
-        )
+        write!(f, "{} must be initialized", self.requiered_stage)
     }
 }
 
-impl Error for VulkanInitOrderError {}
+impl Error for VulkanInitStageError {}
 
 #[derive(Default)]
 pub struct VulkanManager {
@@ -74,8 +69,7 @@ impl VulkanManager {
 
     fn init_instance(&mut self, window: &WindowManager) -> Result<(), Box<dyn Error>> {
         let Some(entry) = self.entry.clone() else {
-            return Err(Box::new(VulkanInitOrderError {
-                attempted_stage: VulkanInitStage::Instance,
+            return Err(Box::new(VulkanInitStageError {
                 requiered_stage: VulkanInitStage::Entry,
             }));
         };
@@ -96,8 +90,7 @@ impl VulkanManager {
 
     fn init_surface(&mut self, window: &WindowManager) -> Result<(), Box<dyn Error>> {
         if self.instance_manager.is_none() {
-            return Err(Box::new(VulkanInitOrderError {
-                attempted_stage: VulkanInitStage::Surface,
+            return Err(Box::new(VulkanInitStageError {
                 requiered_stage: VulkanInitStage::Instance,
             }));
         };
@@ -109,14 +102,12 @@ impl VulkanManager {
     }
     fn init_device(&mut self) -> Result<(), Box<dyn Error>> {
         if self.instance_manager.is_none() {
-            return Err(Box::new(VulkanInitOrderError {
-                attempted_stage: VulkanInitStage::Device,
+            return Err(Box::new(VulkanInitStageError {
                 requiered_stage: VulkanInitStage::Instance,
             }));
         }
         if self.surface_manager.is_none() {
-            return Err(Box::new(VulkanInitOrderError {
-                attempted_stage: VulkanInitStage::Device,
+            return Err(Box::new(VulkanInitStageError {
                 requiered_stage: VulkanInitStage::Surface,
             }));
         };
@@ -129,14 +120,12 @@ impl VulkanManager {
 
     pub fn init_swapchain_manager(&mut self) -> Result<(), Box<dyn Error>> {
         if self.device_manager.is_none() {
-            return Err(Box::new(VulkanInitOrderError {
-                attempted_stage: VulkanInitStage::Swapchain,
+            return Err(Box::new(VulkanInitStageError {
                 requiered_stage: VulkanInitStage::Device,
             }));
         }
         if self.surface_manager.is_none() {
-            return Err(Box::new(VulkanInitOrderError {
-                attempted_stage: VulkanInitStage::Swapchain,
+            return Err(Box::new(VulkanInitStageError {
                 requiered_stage: VulkanInitStage::Surface,
             }));
         }

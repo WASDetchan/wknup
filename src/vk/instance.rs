@@ -208,6 +208,22 @@ impl InstanceManager {
         let swapchain = unsafe { loader.create_swapchain(create_info, None)? };
         Ok(swapchain)
     }
+
+    pub unsafe fn get_swapchain_images(
+        &self,
+        device: &Device,
+        swapchain: SwapchainKHR,
+    ) -> Result<Vec<vk::Image>, Box<dyn Error>> {
+        let Some(instance) = self.instance.as_ref() else {
+            return Err(
+                "cannot make khr::swapchain::Device before Instance is inititalized".into(),
+            );
+        };
+
+        let loader = khr::swapchain::Device::new(instance, device);
+        let images = unsafe { loader.get_swapchain_images(swapchain)? };
+        Ok(images)
+    }
     ///
     /// # Safety
     /// device and swapchain should be valid

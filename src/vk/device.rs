@@ -6,7 +6,7 @@ use std::{error::Error, ffi::CStr, sync::Arc};
 use ash::{
     Device,
     vk::{
-        DeviceCreateInfo, DeviceQueueCreateInfo, PhysicalDevice, PhysicalDeviceFeatures,
+        self, DeviceCreateInfo, DeviceQueueCreateInfo, PhysicalDevice, PhysicalDeviceFeatures,
         PhysicalDeviceProperties, Queue, SwapchainCreateInfoKHR, SwapchainKHR,
     },
 };
@@ -160,6 +160,18 @@ impl DeviceManager {
         if let Some(device) = self.device.as_ref() {
             unsafe { device.destroy_device(None) };
         }
+    }
+
+    pub unsafe fn get_swapchain_images(
+        &self,
+        swapchain: SwapchainKHR,
+    ) -> Result<Vec<vk::Image>, Box<dyn Error>> {
+        let Some(device) = self.device.as_ref() else {
+            return Err("cannot get_swapchain_images before device is initialized".into());
+        };
+        let images = unsafe { self.instance.get_swapchain_images(device, swapchain) }?;
+
+        Ok(images)
     }
 }
 impl Drop for DeviceManager {

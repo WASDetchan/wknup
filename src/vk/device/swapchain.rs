@@ -1,7 +1,7 @@
 use std::{error::Error, sync::Arc};
 
 use ash::vk::{
-    ColorSpaceKHR, CompositeAlphaFlagsKHR, Extent2D, Format, ImageUsageFlags, PresentModeKHR,
+    self, ColorSpaceKHR, CompositeAlphaFlagsKHR, Extent2D, Format, ImageUsageFlags, PresentModeKHR,
     SharingMode, SurfaceCapabilitiesKHR, SurfaceFormatKHR, SurfaceTransformFlagsKHR,
     SwapchainCreateInfoKHR, SwapchainKHR,
 };
@@ -23,8 +23,10 @@ pub fn check_surface_info(surface_info: PhysicalDeviceSurfaceInfo) -> bool {
 }
 
 fn choose_format(formats: Vec<SurfaceFormatKHR>) -> Option<SurfaceFormatKHR> {
-    formats.into_iter().find(|&format| format.format == Format::B8G8R8A8_SRGB
-            && format.color_space == ColorSpaceKHR::SRGB_NONLINEAR)
+    formats.into_iter().find(|&format| {
+        format.format == Format::B8G8R8A8_SRGB
+            && format.color_space == ColorSpaceKHR::SRGB_NONLINEAR
+    })
 }
 
 fn choose_present_mode(modes: Vec<PresentModeKHR>) -> Option<PresentModeKHR> {
@@ -53,6 +55,7 @@ fn choose_transform(capabilities: SurfaceCapabilitiesKHR) -> SurfaceTransformFla
 
 pub struct SwapchainManager {
     swapchain: Option<SwapchainKHR>,
+    images: Vec<vk::Image>,
     device: Arc<DeviceManager>,
     surface: Arc<SurfaceManager>,
 }
@@ -61,6 +64,7 @@ impl SwapchainManager {
     pub fn new(device: Arc<DeviceManager>, surface: Arc<SurfaceManager>) -> Self {
         Self {
             swapchain: None,
+            images: Vec::new(),
             device,
             surface,
         }
@@ -101,6 +105,8 @@ impl SwapchainManager {
                 .queue_family_indices(&indices);
         }
         self.swapchain = Some(self.device.create_swapchain(&swapchain_info)?);
+
+        self.images = unsafe { self.device.get_swapchain_images(self.swapchain.unwrap()) }?;
         Ok(())
     }
 }

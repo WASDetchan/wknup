@@ -1,17 +1,3 @@
-// fn result_to_str(result: Result) -> &str {
-//     match result {
-//         Result::SUCCESS => ,
-//         Result::NOT_READY => ,
-//         Result::TIMEOUT => ,
-//         Result::EVENT_SET => ,
-//         Result::EVENT_RESET => ,
-//         Result::INCOMPLETE => ,
-//         Result:: => ,
-//     }
-// }
-//
-//
-
 use ash::vk;
 use tokio::sync::mpsc::error;
 

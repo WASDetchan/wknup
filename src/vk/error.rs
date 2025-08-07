@@ -1,76 +1,93 @@
 use ash::vk;
 
-#[derive(strum::FromRepr, strum::Display)]
+#[derive(PartialEq, Debug, strum::FromRepr, strum::Display)]
 #[repr(i32)]
-enum VulkanResult {
+pub enum VulkanResult {
     #[doc = "Command completed successfully"]
-    SUCCESS = 0,
+    #[strum(to_string = "")]
+    Success = 0,
     #[doc = "A fence or query has not yet completed"]
-    NOT_READY = 1,
+    #[strum(to_string = "NOT_READY")]
+    NotReady = 1,
     #[doc = "A wait operation has not completed in the specified time"]
-    TIMEOUT = 2,
+    #[strum(to_string = "TIMEOUT")]
+    Timeout = 2,
     #[doc = "An event is signaled"]
-    EVENT_SET = 3,
+    #[strum(to_string = "EVENT_SET")]
+    EventSet = 3,
     #[doc = "An event is unsignaled"]
-    EVENT_RESET = 4,
+    #[strum(to_string = "EVENT_RESET")]
+    EventReset = 4,
     #[doc = "A return array was too small for the result"]
-    INCOMPLETE = 5,
+    #[strum(to_string = "INCOMPLETE")]
+    Incomplete = 5,
     #[doc = "A host memory allocation has failed"]
-    ERROR_OUT_OF_HOST_MEMORY = -1,
+    #[strum(to_string = "ERROR_OUT_OF_HOST_MEMORY")]
+    ErrorOutOfHostMemory = -1,
     #[doc = "A device memory allocation has failed"]
-    ERROR_OUT_OF_DEVICE_MEMORY = -2,
+    #[strum(to_string = "ERROR_OUT_OF_DEVICE_MEMORY")]
+    ErrorOutOfDeviceMemory = -2,
     #[doc = "Initialization of an object has failed"]
-    ERROR_INITIALIZATION_FAILED = -3,
+    #[strum(to_string = "ERROR_INITIALIZATION_FAILED")]
+    ErrorInitializationFailed = -3,
     #[doc = "The logical device has been lost. See <https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#devsandqueues-lost-device>"]
-    ERROR_DEVICE_LOST = -4,
+    #[strum(to_string = "ERROR_DEVICE_LOST")]
+    ErrorDeviceLost = -4,
     #[doc = "Mapping of a memory object has failed"]
-    ERROR_MEMORY_MAP_FAILED = -5,
+    #[strum(to_string = "ERROR_MEMORY_MAP_FAILED")]
+    ErrorMemoryMapFailed = -5,
     #[doc = "Layer specified does not exist"]
-    ERROR_LAYER_NOT_PRESENT = -6,
+    #[strum(to_string = "ERROR_LAYER_NOT_PRESENT")]
+    ErrorLayerNotPresent = -6,
     #[doc = "Extension specified does not exist"]
-    ERROR_EXTENSION_NOT_PRESENT = -7,
+    #[strum(to_string = "ERROR_EXTENSION_NOT_PRESENT")]
+    ErrorExtensionNotPresent = -7,
     #[doc = "Requested feature is not available on this device"]
-    ERROR_FEATURE_NOT_PRESENT = -8,
+    #[strum(to_string = "ERROR_FEATURE_NOT_PRESENT")]
+    ErrorFeatureNotPresent = -8,
     #[doc = "Unable to find a Vulkan driver"]
-    ERROR_INCOMPATIBLE_DRIVER = -9,
+    #[strum(to_string = "ERROR_INCOMPATIBLE_DRIVER")]
+    ErrorIncompatibleDriver = -9,
     #[doc = "Too many objects of the type have already been created"]
-    ERROR_TOO_MANY_OBJECTS = -10,
+    #[strum(to_string = "ERROR_TOO_MANY_OBJECTS")]
+    ErrorTooManyObjects = -10,
     #[doc = "Requested format is not supported on this device"]
-    ERROR_FORMAT_NOT_SUPPORTED = -11,
+    #[strum(to_string = "ERROR_FORMAT_NOT_SUPPORTED")]
+    ErrorFormatNotSupported = -11,
     #[doc = "A requested pool allocation has failed due to fragmentation of the pool's memory"]
-    ERROR_FRAGMENTED_POOL = -12,
+    #[strum(to_string = "ERROR_FRAGMENTED_POOL")]
+    ErrorFragmentedPool = -12,
     #[doc = "An unknown error has occurred, due to an implementation or application bug"]
-    ERROR_UNKNOWN = -13,
+    #[strum(to_string = "ERROR_UNKNOWN")]
+    ErrorUnknown = -13,
 }
 
 impl VulkanResult {
     fn doc(&self) -> &'static str {
         match self {
-            Self::SUCCESS => "Command completed successfully",
-            Self::NOT_READY => "A fence or query has not yet completed",
-            Self::TIMEOUT => "A wait operation has not completed in the specified time",
-            Self::EVENT_SET => "An event is signaled",
-            Self::EVENT_RESET => "An event is unsignaled",
-            Self::INCOMPLETE => "A return array was too small for the result",
-            Self::ERROR_OUT_OF_HOST_MEMORY => "A host memory allocation has failed",
-            Self::ERROR_OUT_OF_DEVICE_MEMORY => "A device memory allocation has failed",
-            Self::ERROR_INITIALIZATION_FAILED => "Initialization of an object has failed",
-            Self::ERROR_DEVICE_LOST => {
+            Self::Success => "Command completed successfully",
+            Self::NotReady => "A fence or query has not yet completed",
+            Self::Timeout => "A wait operation has not completed in the specified time",
+            Self::EventSet => "An event is signaled",
+            Self::EventReset => "An event is unsignaled",
+            Self::Incomplete => "A return array was too small for the result",
+            Self::ErrorOutOfHostMemory => "A host memory allocation has failed",
+            Self::ErrorOutOfDeviceMemory => "A device memory allocation has failed",
+            Self::ErrorInitializationFailed => "Initialization of an object has failed",
+            Self::ErrorDeviceLost => {
                 "The logical device has been lost. See <https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#devsandqueues-lost-device>"
             }
-            Self::ERROR_MEMORY_MAP_FAILED => "Mapping of a memory object has failed",
-            Self::ERROR_LAYER_NOT_PRESENT => "Layer specified does not exist",
-            Self::ERROR_EXTENSION_NOT_PRESENT => "Extension specified does not exist",
-            Self::ERROR_FEATURE_NOT_PRESENT => "Requested feature is not available on this device",
-            Self::ERROR_INCOMPATIBLE_DRIVER => "Unable to find a Vulkan driver",
-            Self::ERROR_TOO_MANY_OBJECTS => {
-                "Too many objects of the type have already been created"
-            }
-            Self::ERROR_FORMAT_NOT_SUPPORTED => "Requested format is not supported on this device",
-            Self::ERROR_FRAGMENTED_POOL => {
+            Self::ErrorMemoryMapFailed => "Mapping of a memory object has failed",
+            Self::ErrorLayerNotPresent => "Layer specified does not exist",
+            Self::ErrorExtensionNotPresent => "Extension specified does not exist",
+            Self::ErrorFeatureNotPresent => "Requested feature is not available on this device",
+            Self::ErrorIncompatibleDriver => "Unable to find a Vulkan driver",
+            Self::ErrorTooManyObjects => "Too many objects of the type have already been created",
+            Self::ErrorFormatNotSupported => "Requested format is not supported on this device",
+            Self::ErrorFragmentedPool => {
                 "A requested pool allocation has failed due to fragmentation of the pool's memory"
             }
-            Self::ERROR_UNKNOWN => {
+            Self::ErrorUnknown => {
                 "An unknown error has occurred, due to an implementation or application bug"
             }
         }
@@ -86,4 +103,47 @@ impl From<vk::Result> for VulkanResult {
 pub fn fatal_vk_error<T: Into<VulkanResult>>(msg: &str, error: T) -> ! {
     let e = error.into();
     panic!("fatal: {}: {} ({})", msg, e, e.doc());
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn from_vk_result() {
+        let result = vk::Result::from_raw(-13);
+        let vulkan_result = VulkanResult::from(result);
+        assert_eq!(vulkan_result, VulkanResult::ErrorUnknown);
+    }
+
+    #[test]
+    fn name() {
+        let vulkan_result = VulkanResult::from(vk::Result::from_raw(-13));
+        let name = vulkan_result.to_string();
+        assert_eq!(name, "ERROR_UNKNOWN");
+    }
+
+    #[test]
+    fn doc() {
+        let vulkan_result = VulkanResult::from(vk::Result::from_raw(-13));
+        let doc = vulkan_result.doc();
+        assert_eq!(
+            doc,
+            "An unknown error has occurred, due to an implementation or application bug"
+        )
+    }
+
+    #[test]
+    #[should_panic]
+    fn fatal() {
+        let vulkan_result = VulkanResult::from(vk::Result::from_raw(-13));
+        fatal_vk_error("ohno", vulkan_result)
+    }
+
+    #[test]
+    #[should_panic]
+    fn fatal_from_vk_result() {
+        let result = vk::Result::from_raw(-13);
+        fatal_vk_error("ohno", result)
+    }
 }

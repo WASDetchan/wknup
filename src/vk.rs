@@ -9,6 +9,7 @@ use surface::SurfaceManager;
 
 use crate::window::WindowManager;
 
+pub mod error;
 pub mod instance;
 pub mod physical_device;
 pub mod surface;

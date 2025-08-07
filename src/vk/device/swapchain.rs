@@ -1,12 +1,13 @@
 use std::{error::Error, sync::Arc};
 
 use ash::vk::{
-    self, ColorSpaceKHR, CompositeAlphaFlagsKHR, Extent2D, Format, ImageUsageFlags, PresentModeKHR,
-    SharingMode, SurfaceCapabilitiesKHR, SurfaceFormatKHR, SurfaceTransformFlagsKHR,
-    SwapchainCreateInfoKHR, SwapchainKHR,
+    self, ColorSpaceKHR, CompositeAlphaFlagsKHR, Extent2D, Format, ImageAspectFlags,
+    ImageUsageFlags, ImageViewCreateInfo, PresentModeKHR, SharingMode, SurfaceCapabilitiesKHR,
+    SurfaceFormatKHR, SurfaceTransformFlagsKHR, SwapchainCreateInfoKHR, SwapchainKHR,
 };
 
 use crate::vk::{
+    VulkanInitStageError,
     physical_device::{PhysicalDeviceSurfaceInfo, QueueFamilyIndices},
     surface::SurfaceManager,
 };
@@ -56,6 +57,7 @@ fn choose_transform(capabilities: SurfaceCapabilitiesKHR) -> SurfaceTransformFla
 pub struct SwapchainManager {
     swapchain: Option<SwapchainKHR>,
     images: Vec<vk::Image>,
+    views: Vec<vk::ImageView>,
     device: Arc<DeviceManager>,
     surface: Arc<SurfaceManager>,
 }
@@ -65,6 +67,7 @@ impl SwapchainManager {
         Self {
             swapchain: None,
             images: Vec::new(),
+            views: Vec::new(),
             device,
             surface,
         }
@@ -107,6 +110,33 @@ impl SwapchainManager {
         self.swapchain = Some(self.device.create_swapchain(&swapchain_info)?);
 
         self.images = unsafe { self.device.get_swapchain_images(self.swapchain.unwrap()) }?;
+
+        let view_info = ImageViewCreateInfo::default()
+            .view_type(vk::ImageViewType::TYPE_2D)
+            .format(format.format)
+            .subresource_range(
+                vk::ImageSubresourceRange::default()
+                    .level_count(1)
+                    .layer_count(1)
+                    .aspect_mask(ImageAspectFlags::COLOR),
+            );
+
+        let views: Vec<Result<vk::ImageView, VulkanInitStageError>> = self
+            .images
+            .iter()
+            .map(|image| {
+                let info = view_info.clone().image(image.clone());
+                unsafe { self.device.create_image_view(&info) }
+            })
+            .collect();
+
+        if let Some(Err(e)) = views.iter().find(|v| v.is_err()) {
+            return Err(Box::new(e.clone()));
+        }
+        let views = views.into_iter().map(|v| v.unwrap()).collect();
+
+        self.views = views;
+
         Ok(())
     }
 }
@@ -118,6 +148,13 @@ impl Drop for SwapchainManager {
                 self.device
                     .destroy_swapchain(self.swapchain.unwrap())
                     .unwrap();
+            }
+            for _ in 0..self.views.len() {
+                unsafe {
+                    self.device
+                        .destroy_image_view(self.views.pop().unwrap())
+                        .unwrap();
+                }
             }
         }
     }

@@ -1,6 +1,6 @@
 use std::ffi::{CStr, CString, c_char};
 
-use ash::{Entry, prelude::VkResult, vk};
+use ash::{Entry, prelude::VkResult};
 
 use super::error::fatal_vk_error;
 

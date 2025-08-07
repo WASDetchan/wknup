@@ -6,13 +6,16 @@ use std::{error::Error, ffi::CStr, sync::Arc};
 use ash::{
     Device,
     vk::{
-        self, DeviceCreateInfo, DeviceQueueCreateInfo, PhysicalDevice, PhysicalDeviceFeatures,
-        PhysicalDeviceProperties, Queue, SwapchainCreateInfoKHR, SwapchainKHR,
+        self, DeviceCreateInfo, DeviceQueueCreateInfo, ImageView, PhysicalDevice,
+        PhysicalDeviceFeatures, PhysicalDeviceProperties, Queue, SwapchainCreateInfoKHR,
+        SwapchainKHR,
     },
 };
 use device_extensions::DeviceExtensionManager;
 
 use super::{
+    VulkanInitStage, VulkanInitStageError,
+    error::fatal_vk_error,
     instance::InstanceManager,
     physical_device::{self, PhysicalDeviceSurfaceInfo, QueueFamilyIndices},
     surface::SurfaceManager,
@@ -172,6 +175,33 @@ impl DeviceManager {
         let images = unsafe { self.instance.get_swapchain_images(device, swapchain) }?;
 
         Ok(images)
+    }
+
+    pub unsafe fn create_image_view(
+        &self,
+        create_info: &vk::ImageViewCreateInfo,
+    ) -> Result<vk::ImageView, VulkanInitStageError> {
+        if self.device.is_none() {
+            return Err(VulkanInitStageError::new(VulkanInitStage::Device));
+        }
+        let view = unsafe {
+            self.device
+                .clone()
+                .unwrap()
+                .create_image_view(create_info, None)
+                .unwrap_or_else(|e| fatal_vk_error("failed to create_image_view", e))
+        };
+        Ok(view)
+    }
+
+    pub unsafe fn destroy_image_view(&self, view: ImageView) -> Result<(), VulkanInitStageError> {
+        if self.device.is_none() {
+            return Err(VulkanInitStageError::new(VulkanInitStage::Device));
+        }
+        unsafe {
+            self.device.as_ref().unwrap().destroy_image_view(view, None);
+        }
+        Ok(())
     }
 }
 impl Drop for DeviceManager {

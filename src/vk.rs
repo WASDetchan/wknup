@@ -14,16 +14,16 @@ pub mod instance;
 pub mod physical_device;
 pub mod surface;
 
-#[derive(Debug, strum::Display)]
+#[derive(Debug, strum::Display, Clone)]
 pub enum VulkanInitStage {
     Entry,
     Instance,
     Surface,
     Device,
-    Swapchain,
+    SwapchainManager,
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, Clone)]
 #[error("{requiered_stage} must be initialized")]
 pub struct VulkanInitStageError {
     pub requiered_stage: VulkanInitStage,
@@ -57,7 +57,7 @@ impl VulkanManager {
             VulkanInitStage::Instance => self.instance_manager.is_none(),
             VulkanInitStage::Surface => self.surface_manager.is_none(),
             VulkanInitStage::Device => self.device_manager.is_none(),
-            VulkanInitStage::Swapchain => self.swapchain_manager.is_none(),
+            VulkanInitStage::SwapchainManager => self.swapchain_manager.is_none(),
         } {
             Err(VulkanInitStageError::new(stage))
         } else {
@@ -106,19 +106,18 @@ impl VulkanManager {
 
     pub fn init_swapchain_manager(&mut self) -> Result<(), Box<dyn Error>> {
         self.require_init_stage(VulkanInitStage::Device)?;
-        self.require_init_stage(VulkanInitStage::Device)?;
+        self.require_init_stage(VulkanInitStage::Surface)?;
 
         let swapchain_manager = SwapchainManager::new(
             self.device_manager.clone().unwrap(),
             self.surface_manager.clone().unwrap(),
         );
         self.swapchain_manager = Some(swapchain_manager);
-        self.create_swapchain()?;
         Ok(())
     }
 
     pub fn create_swapchain(&mut self) -> Result<(), Box<dyn Error>> {
-        self.require_init_stage(VulkanInitStage::Swapchain)?;
+        self.require_init_stage(VulkanInitStage::SwapchainManager)?;
         self.swapchain_manager.as_mut().unwrap().create_swapchain(
             self.device_manager.as_ref().unwrap().get_surface_info()?,
             self.device_manager

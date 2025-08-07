@@ -220,6 +220,7 @@ impl InstanceManager {
         let images = unsafe { loader.get_swapchain_images(swapchain)? };
         Ok(images)
     }
+
     ///
     /// # Safety
     /// device and swapchain should be valid

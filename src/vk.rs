@@ -11,8 +11,9 @@ use crate::window::WindowManager;
 
 pub mod error;
 pub mod instance;
-pub mod physical_device;
-pub mod surface;
+mod physical_device;
+pub mod pipeline;
+mod surface;
 
 #[derive(Debug, strum::Display, Clone)]
 pub enum VulkanInitStage {

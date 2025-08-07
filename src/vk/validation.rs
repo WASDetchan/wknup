@@ -6,6 +6,8 @@ use ash::{
     vk::{self},
 };
 
+use super::error::fatal_vk_error;
+
 #[derive(Debug, thiserror::Error)]
 #[error("validation layer {} is not available", self.layer.to_str().unwrap())]
 pub struct ValidationLayerUnavailableError {
@@ -34,14 +36,8 @@ pub struct ValidationLayerManager {
 impl ValidationLayerManager {
     pub fn init(entry: &Entry) -> Self {
         Self {
-            available: Self::enumerate(entry).unwrap_or_else(|e| match e {
-                vk::Result::ERROR_OUT_OF_HOST_MEMORY => {
-                    panic!("failed to enumerate_instance_layer_properties: out of host memory")
-                }
-                vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => {
-                    panic!("failed to enumerate_instance_layer_properties: out of device memory")
-                }
-                _ => unreachable!("all possible error cases have been covered"),
+            available: Self::enumerate(entry).unwrap_or_else(|e| {
+                fatal_vk_error("failed to enumerate_instance_layer_properties", e)
             }),
         }
     }

@@ -15,6 +15,7 @@ use sdl3::video::Window;
 
 use super::{
     VulkanInitStage, VulkanInitStageError,
+    error::fatal_vk_error,
     extensions::{ExtensionManager, InstanceExtensionUnavailableError},
     physical_device::PhysicalDeviceSurfaceInfo,
     validation::{ValidationLayerManager, ValidationLayerUnavailableError},
@@ -100,21 +101,8 @@ impl InstanceManager {
             .application_info(&application_info)
             .enabled_extension_names(&extension_names)
             .enabled_layer_names(&layer_names);
-        let instance =
-            unsafe { self.entry.create_instance(&create_info, None) }.unwrap_or_else(|e| match e {
-                vk::Result::ERROR_INCOMPATIBLE_DRIVER => {
-                    panic!("fatal: failed to create_instance: unable to find a Vulkan driver")
-                }
-                vk::Result::ERROR_OUT_OF_HOST_MEMORY => {
-                    panic!("fatal: failed to create_instance: a host memory allocation has failed")
-                }
-                vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => {
-                    panic!(
-                        "fatal: failed to create_instance: a device memory allocation has failed"
-                    )
-                }
-                _ => unreachable!("all possible error cases have been covered"),
-            });
+        let instance = unsafe { self.entry.create_instance(&create_info, None) }
+            .unwrap_or_else(|e| fatal_vk_error("failed to create_instance", e));
         self.instance = Some(instance);
         Ok(())
     }

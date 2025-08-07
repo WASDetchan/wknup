@@ -2,6 +2,8 @@ use std::ffi::{CStr, CString, c_char};
 
 use ash::{Entry, prelude::VkResult, vk};
 
+use super::error::fatal_vk_error;
+
 #[derive(Debug, thiserror::Error)]
 #[error("instance extension {} is not available", self.extension.to_str().unwrap())]
 pub struct InstanceExtensionUnavailableError {
@@ -28,14 +30,8 @@ pub struct ExtensionManager {
 impl ExtensionManager {
     pub fn init(entry: &Entry) -> Self {
         Self {
-            available: Self::enumerate(entry).unwrap_or_else(|e| match e {
-                vk::Result::ERROR_OUT_OF_HOST_MEMORY => {
-                    panic!("fatal: failed to enumerate_instance_extension_properties: a host memory allocation has failed")
-                }
-                vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => panic!(
-                    "fatal: failed to enumerate_instance_extension_properties: a device memory allocation has failed"
-                ),
-                _ => unreachable!("all possible error cases have been covered"),
+            available: Self::enumerate(entry).unwrap_or_else(|e| {
+                fatal_vk_error("failed to enumerate_instance_extension_properties", e)
             }),
         }
     }

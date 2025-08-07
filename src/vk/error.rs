@@ -1,5 +1,4 @@
 use ash::vk;
-use tokio::sync::mpsc::error;
 
 #[derive(strum::FromRepr, strum::Display)]
 #[repr(i32)]
@@ -80,7 +79,7 @@ impl VulkanResult {
 
 impl From<vk::Result> for VulkanResult {
     fn from(value: vk::Result) -> Self {
-        return Self::from_repr(value.as_raw()).expect("all VkResult cases are covered");
+        Self::from_repr(value.as_raw()).expect("all VkResult cases are covered")
     }
 }
 

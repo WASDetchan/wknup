@@ -89,14 +89,13 @@ impl ValidationLayerManager {
         Self {}
     }
 
-    pub fn enumerate(&mut self, _: &Entry) {}
-    pub fn check_layers(&self, _: &[String]) -> Result<(), Box<dyn Error>> {
+    pub fn enumerate(_: &Entry) -> VkResult<Vec<ValidationLayer>> {
+        Ok(Vec::new())
+    }
+    pub fn check_layers(&self, _: &[String]) -> Result<(), ValidationLayerUnavailableError> {
         Ok(())
     }
-    pub fn init(entry: &Entry) -> Result<Self, Box<dyn Error>> {
-        Ok(Self::new())
-    }
-    pub fn add_layers(&mut self, layers: &[String]) -> Result<(), Box<dyn Error>> {
+    pub fn add_layers(&mut self, layers: &[String]) -> Result<(), ValidationLayerUnavailableError> {
         Ok(())
     }
 

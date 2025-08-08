@@ -1,13 +1,17 @@
 use std::sync::Arc;
 
+use ash::vk;
+
+use crate::vk::shader::ShaderModule;
+
 use super::VulkanManager;
 
-struct PipelineManager {
-    vulkan: Arc<VulkanManager>,
+pub struct PipelineManager {
+    shader: ShaderModule,
 }
 
 impl PipelineManager {
-    fn init(vulkan: Arc<VulkanManager>) -> Self {
-        Self { vulkan }
+    pub fn init(vulkan: &VulkanManager, shader: ShaderModule) -> Self {
+        Self { shader }
     }
 }

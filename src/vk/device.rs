@@ -7,8 +7,7 @@ use ash::{
     Device,
     vk::{
         self, DeviceCreateInfo, DeviceQueueCreateInfo, ImageView, PhysicalDevice,
-        PhysicalDeviceFeatures, PhysicalDeviceFeatures2, PhysicalDeviceProperties, Queue,
-        ShaderModule, SwapchainCreateInfoKHR, SwapchainKHR,
+        PhysicalDeviceProperties, Queue, ShaderModule, SwapchainCreateInfoKHR, SwapchainKHR,
     },
 };
 use device_extensions::DeviceExtensionManager;
@@ -18,7 +17,8 @@ use super::{
     error::fatal_vk_error,
     instance::InstanceManager,
     physical_device::{
-        self, PhysicalDeviceSurfaceInfo, QueueFamilyIndices, features::FeaturesInfo,
+        self, PhysicalDeviceSurfaceInfo, QueueFamilyIndices,
+        features::{self, FeaturesInfo, PhysicalDeviceFeatures2},
     },
     surface::SurfaceManager,
 };
@@ -86,8 +86,10 @@ impl DeviceManager {
             vec![graphic_info, present_info]
         };
 
-        let device_features = PhysicalDeviceFeatures::default();
-        let device_features2 = PhysicalDeviceFeatures2::default();
+        let features2 = PhysicalDeviceFeatures2::new_required();
+
+        let device_features = features2.features();
+        let mut next = features2.next();
 
         let mut device_extension_manager =
             DeviceExtensionManager::init(&self.instance, self.physical_device.unwrap())?;
@@ -97,7 +99,8 @@ impl DeviceManager {
         let device_info = DeviceCreateInfo::default()
             .queue_create_infos(&queue_infos)
             .enabled_features(&device_features)
-            .enabled_extension_names(&ext_names);
+            .enabled_extension_names(&ext_names)
+            .push_next(&mut next);
         let Some(physical_device) = self.physical_device else {
             return Err("cannot init device before physical device is initialized".into());
         };

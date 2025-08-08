@@ -1,8 +1,8 @@
 use ash::{
-    vk::{self},
     Entry,
+    vk::{self},
 };
-use device::{swapchain::SwapchainManager, DeviceManager};
+use device::{DeviceManager, swapchain::SwapchainManager};
 use instance::InstanceManager;
 use shader::ShaderModule;
 use std::{error::Error, sync::Arc};

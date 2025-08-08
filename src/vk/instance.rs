@@ -19,7 +19,7 @@ use super::{
     extensions::{ExtensionManager, InstanceExtensionUnavailableError},
     physical_device::{
         PhysicalDeviceSurfaceInfo,
-        features::{self, FeaturesInfo, PhysicalDeviceFeatures2},
+        features::{FeaturesInfo, PhysicalDeviceFeatures2},
     },
     validation::{ValidationLayerManager, ValidationLayerUnavailableError},
 };
@@ -142,14 +142,11 @@ impl InstanceManager {
     ) -> Result<PhysicalDeviceInfo, VulkanInitStageError> {
         let instance = self.require_instance()?;
         let mut features2 = PhysicalDeviceFeatures2::new();
-        // dbg!(&features2);
         unsafe {
             features2.fill(device, instance);
         }
 
-        dbg!(&features2);
         let features = FeaturesInfo::from_features2(features2);
-        dbg!(&features);
 
         Ok(PhysicalDeviceInfo {
             properties: unsafe { instance.get_physical_device_properties(device) },

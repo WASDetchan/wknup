@@ -113,11 +113,15 @@ fn rate_physical_device(
         return 0;
     }
 
-    if !features.vulkan_memory_model {
-        return 0;
-    }
-
-    if features.features.geometry_shader != 1 {
+    // if !features.vulkan_memory_model {
+    //     return 0;
+    // }
+    //
+    // if features.features.geometry_shader != 1 {
+    //     return 0;
+    // }
+    //
+    if features.check_required().is_err() {
         return 0;
     }
     qfi.fill(instance, device);

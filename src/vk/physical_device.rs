@@ -1,3 +1,5 @@
+pub mod features;
+
 use std::{error::Error, sync::Arc, vec::IntoIter};
 
 use ash::vk::{
@@ -90,7 +92,6 @@ impl QueueFamilyIndices {
         )
     }
 }
-
 fn rate_physical_device(
     instance: &Arc<InstanceManager>,
     device: PhysicalDevice,
@@ -106,16 +107,19 @@ fn rate_physical_device(
         return 0;
     }
 
-    if features.geometry_shader != 1 {
-        return 0;
-    }
-
     if device_extensions::check_extensions(instance, device, &device::REQUIRED_DEVICE_EXTENSIONS)
         .is_err()
     {
         return 0;
     }
 
+    if !features.vulkan_memory_model {
+        return 0;
+    }
+
+    if features.features.geometry_shader != 1 {
+        return 0;
+    }
     qfi.fill(instance, device);
     if !qfi.is_complete() {
         return 0;

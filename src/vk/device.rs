@@ -7,8 +7,8 @@ use ash::{
     Device,
     vk::{
         self, DeviceCreateInfo, DeviceQueueCreateInfo, ImageView, PhysicalDevice,
-        PhysicalDeviceFeatures, PhysicalDeviceProperties, Queue, SwapchainCreateInfoKHR,
-        SwapchainKHR,
+        PhysicalDeviceFeatures, PhysicalDeviceFeatures2, PhysicalDeviceProperties, Queue,
+        ShaderModule, SwapchainCreateInfoKHR, SwapchainKHR,
     },
 };
 use device_extensions::DeviceExtensionManager;
@@ -17,11 +17,14 @@ use super::{
     VulkanInitStage, VulkanInitStageError,
     error::fatal_vk_error,
     instance::InstanceManager,
-    physical_device::{self, PhysicalDeviceSurfaceInfo, QueueFamilyIndices},
+    physical_device::{
+        self, PhysicalDeviceSurfaceInfo, QueueFamilyIndices, features::FeaturesInfo,
+    },
     surface::SurfaceManager,
 };
 
-pub const REQUIRED_DEVICE_EXTENSIONS: [&CStr; 1] = [c"VK_KHR_swapchain"];
+pub const REQUIRED_DEVICE_EXTENSIONS: [&CStr; 2] =
+    [c"VK_KHR_swapchain", c"VK_KHR_vulkan_memory_model"];
 struct Queues {
     graphics: Queue,
     present: Queue,
@@ -29,7 +32,7 @@ struct Queues {
 
 pub struct PhysicalDeviceInfo {
     pub properties: PhysicalDeviceProperties,
-    pub features: PhysicalDeviceFeatures,
+    pub features: FeaturesInfo,
 }
 
 pub struct DeviceManager {
@@ -84,6 +87,7 @@ impl DeviceManager {
         };
 
         let device_features = PhysicalDeviceFeatures::default();
+        let device_features2 = PhysicalDeviceFeatures2::default();
 
         let mut device_extension_manager =
             DeviceExtensionManager::init(&self.instance, self.physical_device.unwrap())?;
@@ -200,6 +204,39 @@ impl DeviceManager {
         }
         unsafe {
             self.device.as_ref().unwrap().destroy_image_view(view, None);
+        }
+        Ok(())
+    }
+
+    pub unsafe fn create_shader_module(
+        &self,
+        shader: &[u32],
+    ) -> Result<ShaderModule, VulkanInitStageError> {
+        if self.device.is_none() {
+            return Err(VulkanInitStageError::new(VulkanInitStage::Device));
+        }
+        let create_info = vk::ShaderModuleCreateInfo::default().code(shader);
+        Ok(unsafe {
+            self.device
+                .as_ref()
+                .unwrap()
+                .create_shader_module(&create_info, None)
+                .unwrap_or_else(|e| fatal_vk_error("failed to create_shader_module", e))
+        })
+    }
+
+    pub unsafe fn destroy_shader_module(
+        &self,
+        shader: vk::ShaderModule,
+    ) -> Result<(), VulkanInitStageError> {
+        if self.device.is_none() {
+            return Err(VulkanInitStageError::new(VulkanInitStage::Device));
+        }
+        unsafe {
+            self.device
+                .as_ref()
+                .unwrap()
+                .destroy_shader_module(shader, None);
         }
         Ok(())
     }

@@ -17,7 +17,10 @@ use super::{
     VulkanInitStage, VulkanInitStageError,
     error::fatal_vk_error,
     extensions::{ExtensionManager, InstanceExtensionUnavailableError},
-    physical_device::PhysicalDeviceSurfaceInfo,
+    physical_device::{
+        PhysicalDeviceSurfaceInfo,
+        features::{self, FeaturesInfo, PhysicalDeviceFeatures2},
+    },
     validation::{ValidationLayerManager, ValidationLayerUnavailableError},
 };
 use crate::vk::device::PhysicalDeviceInfo;
@@ -132,14 +135,25 @@ impl InstanceManager {
         let instance = self.require_instance()?;
         Ok(unsafe { instance.enumerate_physical_devices() }?)
     }
+
     pub fn get_physical_device_info(
         &self,
         device: PhysicalDevice,
     ) -> Result<PhysicalDeviceInfo, VulkanInitStageError> {
         let instance = self.require_instance()?;
+        let mut features2 = PhysicalDeviceFeatures2::new();
+        // dbg!(&features2);
+        unsafe {
+            features2.fill(device, instance);
+        }
+
+        dbg!(&features2);
+        let features = FeaturesInfo::from_features2(features2);
+        dbg!(&features);
+
         Ok(PhysicalDeviceInfo {
             properties: unsafe { instance.get_physical_device_properties(device) },
-            features: unsafe { instance.get_physical_device_features(device) },
+            features,
         })
     }
     pub fn get_physical_device_queue_family_properties(
@@ -159,6 +173,7 @@ impl InstanceManager {
         let s_instance = khr::surface::Instance::new(&self.entry, instance);
         Ok(unsafe { s_instance.get_physical_device_surface_support(device, id, surface) }?)
     }
+
     pub fn create_device(
         &self,
         physical_device: PhysicalDevice,

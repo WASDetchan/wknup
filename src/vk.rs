@@ -1,9 +1,10 @@
 use ash::{
-    Entry,
     vk::{self},
+    Entry,
 };
-use device::{DeviceManager, swapchain::SwapchainManager};
+use device::{swapchain::SwapchainManager, DeviceManager};
 use instance::InstanceManager;
+use shader::ShaderModule;
 use std::{error::Error, sync::Arc};
 use surface::SurfaceManager;
 
@@ -13,6 +14,7 @@ pub mod error;
 pub mod instance;
 mod physical_device;
 pub mod pipeline;
+pub mod shader;
 mod surface;
 
 #[derive(Debug, strum::Display, Clone)]
@@ -48,7 +50,7 @@ pub struct VulkanManager {
 }
 
 impl VulkanManager {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self::default()
     }
 
@@ -105,7 +107,7 @@ impl VulkanManager {
         Ok(())
     }
 
-    pub fn init_swapchain_manager(&mut self) -> Result<(), Box<dyn Error>> {
+    fn init_swapchain_manager(&mut self) -> Result<(), Box<dyn Error>> {
         self.require_init_stage(VulkanInitStage::Device)?;
         self.require_init_stage(VulkanInitStage::Surface)?;
 
@@ -136,6 +138,11 @@ impl VulkanManager {
         vulkan_manager.init_device()?;
         vulkan_manager.init_swapchain_manager()?;
         Ok(vulkan_manager)
+    }
+
+    pub fn create_shader_module(&self, shader: &[u32]) -> ShaderModule {
+        self.require_init_stage(VulkanInitStage::Device).unwrap();
+        ShaderModule::new(self.device_manager.clone().unwrap(), shader)
     }
 }
 

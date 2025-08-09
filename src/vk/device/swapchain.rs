@@ -7,12 +7,17 @@ use ash::vk::{
 };
 
 use crate::vk::{
-    VulkanInitStageError,
+    VulkanInitStage, VulkanInitStageError,
     physical_device::{PhysicalDeviceSurfaceInfo, QueueFamilyIndices},
     surface::SurfaceManager,
 };
 
 use super::DeviceManager;
+use thiserror;
+
+#[derive(Debug, thiserror::Error)]
+#[error("the swapchain SwapchainManager currently has is missing or invalid")]
+pub struct InvalidSwapchainError;
 
 pub fn check_surface_info(surface_info: PhysicalDeviceSurfaceInfo) -> bool {
     if choose_format(surface_info.formats).is_none()
@@ -54,8 +59,15 @@ fn choose_transform(capabilities: SurfaceCapabilitiesKHR) -> SurfaceTransformFla
     capabilities.current_transform
 }
 
+struct Swapchain {
+    swapchain_khr: SwapchainKHR,
+    extent: Extent2D,
+    format: SurfaceFormatKHR,
+    present_mode: PresentModeKHR,
+}
+
 pub struct SwapchainManager {
-    swapchain: Option<SwapchainKHR>,
+    swapchain: Option<Swapchain>,
     images: Vec<vk::Image>,
     views: Vec<vk::ImageView>,
     device: Arc<DeviceManager>,
@@ -82,22 +94,26 @@ impl SwapchainManager {
         let indices = [graphic as u32, present as u32];
 
         let capabilities = surface_info.capabilities;
+
         let format = choose_format(surface_info.formats).unwrap();
+        let extent = choose_swap_extent(capabilities);
+        let present_mode = choose_present_mode(surface_info.present_modes).unwrap();
+
         let mut swapchain_info = SwapchainCreateInfoKHR::default()
             .surface(unsafe { self.surface.raw_handle() })
             .min_image_count(choose_image_count(capabilities))
             .image_format(format.format)
             .image_color_space(format.color_space)
-            .image_extent(choose_swap_extent(capabilities))
+            .image_extent(extent)
             .image_array_layers(1)
             .image_usage(ImageUsageFlags::COLOR_ATTACHMENT)
             .pre_transform(choose_transform(capabilities))
             .composite_alpha(CompositeAlphaFlagsKHR::OPAQUE)
-            .present_mode(choose_present_mode(surface_info.present_modes).unwrap())
+            .present_mode(present_mode)
             .clipped(true);
 
         if let Some(swapchain) = self.swapchain.take() {
-            swapchain_info = swapchain_info.old_swapchain(swapchain);
+            swapchain_info = swapchain_info.old_swapchain(swapchain.swapchain_khr);
         }
 
         if graphic == present {
@@ -107,9 +123,18 @@ impl SwapchainManager {
                 .image_sharing_mode(SharingMode::CONCURRENT)
                 .queue_family_indices(&indices);
         }
-        self.swapchain = Some(self.device.create_swapchain(&swapchain_info)?);
+        let swapchain_khr = self.device.create_swapchain(&swapchain_info)?;
+        self.swapchain = Some(Swapchain {
+            swapchain_khr,
+            format,
+            present_mode,
+            extent,
+        });
 
-        self.images = unsafe { self.device.get_swapchain_images(self.swapchain.unwrap()) }?;
+        self.images = unsafe {
+            self.device
+                .get_swapchain_images(self.swapchain.as_ref().unwrap().swapchain_khr)
+        }?;
 
         let view_info = ImageViewCreateInfo::default()
             .view_type(vk::ImageViewType::TYPE_2D)
@@ -139,6 +164,21 @@ impl SwapchainManager {
 
         Ok(())
     }
+
+    pub fn make_viewport(&self) -> Result<(vk::Viewport, vk::Rect2D), InvalidSwapchainError> {
+        if self.swapchain.is_none() {
+            return Err(InvalidSwapchainError);
+        }
+
+        let extent = self.swapchain.as_ref().unwrap().extent;
+        let Extent2D { width, height } = extent;
+        let viewport = vk::Viewport::default()
+            .width(width as f32)
+            .height(height as f32)
+            .max_depth(1.0f32);
+        let scissors = vk::Rect2D::default().extent(extent);
+        Ok((viewport, scissors))
+    }
 }
 
 impl Drop for SwapchainManager {
@@ -146,7 +186,7 @@ impl Drop for SwapchainManager {
         if self.swapchain.is_some() {
             unsafe {
                 self.device
-                    .destroy_swapchain(self.swapchain.unwrap())
+                    .destroy_swapchain(self.swapchain.as_mut().unwrap().swapchain_khr)
                     .unwrap();
             }
             for _ in 0..self.views.len() {

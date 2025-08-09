@@ -140,6 +140,11 @@ impl VulkanManager {
         self.require_init_stage(VulkanInitStage::Device).unwrap();
         ShaderModule::new(self.device_manager.clone().unwrap(), shader)
     }
+
+    pub fn make_viewport(&self) -> Result<(vk::Viewport, vk::Rect2D), Box<dyn Error>> {
+        self.require_init_stage(VulkanInitStage::SwapchainManager)?;
+        Ok(self.swapchain_manager.as_ref().unwrap().make_viewport()?)
+    }
 }
 
 mod extensions;

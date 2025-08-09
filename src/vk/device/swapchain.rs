@@ -84,11 +84,10 @@ impl SwapchainManager {
             surface,
         }
     }
-    pub fn create_swapchain(
-        &mut self,
-        surface_info: PhysicalDeviceSurfaceInfo,
-        queue_family_indices: QueueFamilyIndices,
-    ) -> Result<(), Box<dyn Error>> {
+    pub fn create_swapchain(&mut self) -> Result<(), Box<dyn Error>> {
+        let surface_info = self.device.get_surface_info()?;
+        let queue_family_indices = self.device_manager.get_queue_family_indices();
+
         let graphic = queue_family_indices.graphics.unwrap();
         let present = queue_family_indices.present.unwrap();
         let indices = [graphic as u32, present as u32];
@@ -176,8 +175,8 @@ impl SwapchainManager {
             .width(width as f32)
             .height(height as f32)
             .max_depth(1.0f32);
-        let scissors = vk::Rect2D::default().extent(extent);
-        Ok((viewport, scissors))
+        let scissor = vk::Rect2D::default().extent(extent);
+        Ok((viewport, scissor))
     }
 }
 

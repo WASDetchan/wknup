@@ -46,7 +46,7 @@ pub struct VulkanManager {
     instance_manager: Option<Arc<InstanceManager>>,
     surface_manager: Option<Arc<SurfaceManager>>,
     device_manager: Option<Arc<DeviceManager>>,
-    swapchain_manager: Option<SwapchainManager>,
+    swapchain_manager: Option<Arc<SwapchainManager>>,
 }
 
 impl VulkanManager {
@@ -107,24 +107,17 @@ impl VulkanManager {
         self.require_init_stage(VulkanInitStage::Device)?;
         self.require_init_stage(VulkanInitStage::Surface)?;
 
-        let swapchain_manager = SwapchainManager::new(
+        let swapchain_manager = Arc::new(SwapchainManager::new(
             self.device_manager.clone().unwrap(),
             self.surface_manager.clone().unwrap(),
-        );
+        ));
         self.swapchain_manager = Some(swapchain_manager);
         Ok(())
     }
 
-    pub fn create_swapchain(&mut self) -> Result<(), Box<dyn Error>> {
+    pub fn get_swapchain_manager(&self) -> Result<Arc<SwapchainManager>, VulkanInitStageError> {
         self.require_init_stage(VulkanInitStage::SwapchainManager)?;
-        self.swapchain_manager.as_mut().unwrap().create_swapchain(
-            self.device_manager.as_ref().unwrap().get_surface_info()?,
-            self.device_manager
-                .as_ref()
-                .unwrap()
-                .get_queue_family_indices(),
-        )?;
-        Ok(())
+        Ok(self.swapchain_manager.clone().unwrap())
     }
     pub fn init(window: &WindowManager) -> Result<Self, Box<dyn Error>> {
         let mut vulkan_manager = Self::default();
@@ -139,11 +132,6 @@ impl VulkanManager {
     pub fn create_shader_module(&self, shader: &[u32]) -> ShaderModule {
         self.require_init_stage(VulkanInitStage::Device).unwrap();
         ShaderModule::new(self.device_manager.clone().unwrap(), shader)
-    }
-
-    pub fn make_viewport(&self) -> Result<(vk::Viewport, vk::Rect2D), Box<dyn Error>> {
-        self.require_init_stage(VulkanInitStage::SwapchainManager)?;
-        Ok(self.swapchain_manager.as_ref().unwrap().make_viewport()?)
     }
 }
 

@@ -1,8 +1,7 @@
 use ash::{
     Instance,
     vk::{
-        self, ExtendsDeviceCreateInfo, PhysicalDeviceFeatures,
-        PhysicalDeviceVulkanMemoryModelFeatures,
+        self, ExtendsDeviceCreateInfo,
     },
 };
 
@@ -143,6 +142,12 @@ pub struct PhysicalDeviceFeatures2<'a> {
     vulkan_memory_model_features: Box<vk::PhysicalDeviceVulkanMemoryModelFeatures<'a>>,
 }
 
+impl<'a> Default for PhysicalDeviceFeatures2<'a> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<'a> PhysicalDeviceFeatures2<'a> {
     pub fn new() -> Self {
         let mut vulkan_memory_model_features =
@@ -171,7 +176,7 @@ impl<'a> PhysicalDeviceFeatures2<'a> {
     }
 
     pub fn new_required() -> Self {
-        let mut vulkan_memory_model_features =
+        let vulkan_memory_model_features =
             vk::PhysicalDeviceVulkanMemoryModelFeatures::default().vulkan_memory_model(true);
         let mut vulkan_memory_model_features = Box::new(vulkan_memory_model_features);
 
@@ -191,10 +196,10 @@ impl<'a> PhysicalDeviceFeatures2<'a> {
     }
 
     pub fn features(&self) -> vk::PhysicalDeviceFeatures {
-        self.features2.as_ref().features.clone()
+        self.features2.as_ref().features
     }
 
     pub fn next(&self) -> impl ExtendsDeviceCreateInfo {
-        self.vulkan_memory_model_features.as_ref().clone()
+        *self.vulkan_memory_model_features.as_ref()
     }
 }

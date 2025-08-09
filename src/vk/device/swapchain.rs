@@ -125,7 +125,7 @@ impl SwapchainManager {
             .images
             .iter()
             .map(|image| {
-                let info = view_info.clone().image(image.clone());
+                let info = view_info.image(*image);
                 unsafe { self.device.create_image_view(&info) }
             })
             .collect();

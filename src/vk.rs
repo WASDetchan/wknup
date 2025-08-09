@@ -50,10 +50,6 @@ pub struct VulkanManager {
 }
 
 impl VulkanManager {
-    fn new() -> Self {
-        Self::default()
-    }
-
     fn require_init_stage(&self, stage: VulkanInitStage) -> Result<(), VulkanInitStageError> {
         if match stage {
             VulkanInitStage::Entry => self.entry.is_none(),

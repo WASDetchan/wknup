@@ -18,7 +18,7 @@ use super::{
     instance::InstanceManager,
     physical_device::{
         self, PhysicalDeviceSurfaceInfo, QueueFamilyIndices,
-        features::{self, FeaturesInfo, PhysicalDeviceFeatures2},
+        features::{FeaturesInfo, PhysicalDeviceFeatures2},
     },
     surface::SurfaceManager,
 };

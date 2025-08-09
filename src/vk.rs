@@ -115,10 +115,16 @@ impl VulkanManager {
         Ok(())
     }
 
-    pub fn get_swapchain_manager(&self) -> Result<Arc<SwapchainManager>, VulkanInitStageError> {
+    pub fn clone_swapchain_manager(&self) -> Result<Arc<SwapchainManager>, VulkanInitStageError> {
         self.require_init_stage(VulkanInitStage::SwapchainManager)?;
         Ok(self.swapchain_manager.clone().unwrap())
     }
+
+    pub fn get_device_manager(&self) -> Result<Arc<DeviceManager, VulkanInitStageError>> {
+        self.require_init_stage(VulkanInitStage::Device)?;
+        Ok(self.device_manager.clone().unwrap())
+    }
+
     pub fn init(window: &WindowManager) -> Result<Self, Box<dyn Error>> {
         let mut vulkan_manager = Self::default();
         vulkan_manager.init_entry();

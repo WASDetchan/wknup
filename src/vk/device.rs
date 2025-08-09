@@ -243,6 +243,20 @@ impl DeviceManager {
         }
         Ok(())
     }
+
+    pub fn create_pipeline_layout(
+        &self,
+        create_info: vk::PipelineLayoutCreateInfo,
+    ) -> Result<vk::PipelineLayout, Box<dyn Error>> {
+        if self.device.is_none() {
+            return Err(VulkanInitStageError::new(VulkanInitStage::Device));
+        }
+
+        Ok(self
+            .device
+            .unwrap()
+            .create_pipeline_layout(create_info, None)?)
+    }
 }
 impl Drop for DeviceManager {
     fn drop(&mut self) {

@@ -111,10 +111,6 @@ impl SwapchainManager {
             .present_mode(present_mode)
             .clipped(true);
 
-        if let Some(swapchain) = self.swapchain.take() {
-            swapchain_info = swapchain_info.old_swapchain(swapchain.swapchain_khr);
-        }
-
         if graphic == present {
             swapchain_info = swapchain_info.image_sharing_mode(SharingMode::EXCLUSIVE)
         } else {

@@ -1,8 +1,6 @@
 use ash::{
     Instance,
-    vk::{
-        self, ExtendsDeviceCreateInfo,
-    },
+    vk::{self, ExtendsDeviceCreateInfo},
 };
 
 #[derive(Default, Debug)]

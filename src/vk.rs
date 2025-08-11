@@ -17,130 +17,109 @@ pub mod pipeline;
 pub mod shader;
 mod surface;
 
-#[derive(Debug, strum::Display, Clone)]
-pub enum VulkanInitStage {
-    Entry,
-    Instance,
-    Surface,
-    Device,
-    SwapchainManager,
+// #[derive(Debug, strum::Display, Clone)]
+// pub enum VulkanInitStage {
+//     Entry,
+//     Instance,
+//     Surface,
+//     Device,
+//     SwapchainManager,
+// }
+//
+// #[derive(Debug, thiserror::Error, Clone)]
+// #[error("{requiered_stage} must be initialized")]
+// pub struct VulkanInitStageError {
+//     pub requiered_stage: VulkanInitStage,
+// }
+//
+// impl VulkanInitStageError {
+//     fn new(stage: VulkanInitStage) -> Self {
+//         Self {
+//             requiered_stage: stage,
+//         }
+//     }
+// }
+
+pub struct VulkanBuilder<'a> {
+    window: &'a WindowManager,
 }
 
-#[derive(Debug, thiserror::Error, Clone)]
-#[error("{requiered_stage} must be initialized")]
-pub struct VulkanInitStageError {
-    pub requiered_stage: VulkanInitStage,
-}
-
-impl VulkanInitStageError {
-    fn new(stage: VulkanInitStage) -> Self {
-        Self {
-            requiered_stage: stage,
-        }
-    }
-}
-
-#[derive(Default)]
-pub struct VulkanManager {
-    entry: Option<Arc<Entry>>,
-    instance: Option<Arc<Instance>>,
-    surface_manager: Option<Arc<SurfaceManager>>,
-    device: Option<Arc<Device>>,
-    swapchain_manager: Option<Arc<SwapchainManager>>,
-}
-
-impl VulkanManager {
-    fn require_init_stage(&self, stage: VulkanInitStage) -> Result<(), VulkanInitStageError> {
-        if match stage {
-            VulkanInitStage::Entry => self.entry.is_none(),
-            VulkanInitStage::Instance => self.instance.is_none(),
-            VulkanInitStage::Surface => self.surface_manager.is_none(),
-            VulkanInitStage::Device => self.device.is_none(),
-            VulkanInitStage::SwapchainManager => self.swapchain_manager.is_none(),
-        } {
-            Err(VulkanInitStageError::new(stage))
-        } else {
-            Ok(())
-        }
+impl<'a> VulkanBuilder<'a> {
+    pub fn new(window: &'a WindowManager) -> Self {
+        VulkanBuilder { window }
     }
 
-    fn init_entry(&mut self) {
-        self.entry = Some(Arc::new(Entry::linked()));
+    fn init_entry() -> Arc<Entry> {
+        Arc::new(Entry::linked())
     }
 
-    fn init_instance(&mut self, window: &WindowManager) -> Result<(), Box<dyn Error>> {
-        self.require_init_stage(VulkanInitStage::Entry)?;
-
+    fn init_instance(
+        window: &WindowManager,
+        entry: Arc<Entry>,
+    ) -> Result<Arc<Instance>, Box<dyn Error>> {
         let wm_required_extensions = window.get_vk_extensions()?;
 
-        let instance = InstanceBuilder::new(self.entry.clone().unwrap())
+        let instance = InstanceBuilder::new(entry)
             .extensions(wm_required_extensions)
             .validation_layers(vec![String::from("VK_LAYER_KHRONOS_validation")])
             .application_props(String::from("WKNUP"), 1)
             .api_version(vk::make_api_version(0, 1, 1, 0))
             .build()?;
+        Ok(Arc::new(instance))
+    }
+    fn init_surface(
+        window: &WindowManager,
+        instance: Arc<Instance>,
+    ) -> Result<Arc<SurfaceManager>, sdl3::Error> {
+        Ok(Arc::new(SurfaceManager::init(instance, window)?))
+    }
+    fn init_device(
+        instance: Arc<Instance>,
+        surface: Arc<SurfaceManager>,
+    ) -> Result<Arc<Device>, Box<dyn Error>> {
+        Ok(Arc::new(DeviceBuilder::new(instance, surface).build()?))
+    }
+    fn init_swapchain_manager(
+        surface: Arc<SurfaceManager>,
+        device: Arc<Device>,
+    ) -> Arc<SwapchainManager> {
+        Arc::new(SwapchainManager::new(device, surface))
+    }
+    pub fn build(self) -> Result<Vulkan, Box<dyn Error>> {
+        let entry = Self::init_entry();
+        let instance = Self::init_instance(self.window, Arc::clone(&entry))?;
+        let surface = Self::init_surface(self.window, Arc::clone(&instance))?;
+        let device = Self::init_device(Arc::clone(&instance), Arc::clone(&surface))?;
+        let swapchain_manager =
+            Self::init_swapchain_manager(Arc::clone(&surface), Arc::clone(&device));
+        Ok(Vulkan {
+            entry,
+            instance,
+            surface,
+            device,
+            swapchain_manager,
+        })
+    }
+}
+pub struct Vulkan {
+    entry: Arc<Entry>,
+    instance: Arc<Instance>,
+    surface: Arc<SurfaceManager>,
+    device: Arc<Device>,
+    swapchain_manager: Arc<SwapchainManager>,
+}
 
-        self.instance = Some(Arc::new(instance));
-
-        Ok(())
+impl Vulkan {
+    pub fn get_swapchain_manager(&self) -> Arc<SwapchainManager> {
+        Arc::clone(&self.swapchain_manager)
     }
 
-    fn init_surface(&mut self, window: &WindowManager) -> Result<(), Box<dyn Error>> {
-        self.require_init_stage(VulkanInitStage::Instance)?;
-        self.surface_manager = Some(Arc::new(SurfaceManager::init(
-            self.instance.clone().unwrap(),
-            window,
-        )?));
-        Ok(())
-    }
-    fn init_device(&mut self) -> Result<(), Box<dyn Error>> {
-        self.require_init_stage(VulkanInitStage::Instance)?;
-        self.require_init_stage(VulkanInitStage::Surface)?;
-        self.device = Some(Arc::new(
-            DeviceBuilder::new(
-                self.instance.clone().unwrap(),
-                self.surface_manager.clone().unwrap(),
-            )
-            .build()?,
-        ));
-        Ok(())
-    }
-
-    fn init_swapchain_manager(&mut self) -> Result<(), Box<dyn Error>> {
-        self.require_init_stage(VulkanInitStage::Device)?;
-        self.require_init_stage(VulkanInitStage::Surface)?;
-
-        let swapchain_manager = Arc::new(SwapchainManager::new(
-            self.device.clone().unwrap(),
-            self.surface_manager.clone().unwrap(),
-        ));
-        self.swapchain_manager = Some(swapchain_manager);
-        Ok(())
-    }
-
-    pub fn clone_swapchain_manager(&self) -> Result<Arc<SwapchainManager>, VulkanInitStageError> {
-        self.require_init_stage(VulkanInitStage::SwapchainManager)?;
-        Ok(self.swapchain_manager.clone().unwrap())
-    }
-
-    pub fn get_device(&self) -> Result<Arc<Device>, VulkanInitStageError> {
-        self.require_init_stage(VulkanInitStage::Device)?;
-        Ok(self.device.clone().unwrap())
-    }
-
-    pub fn init(window: &WindowManager) -> Result<Self, Box<dyn Error>> {
-        let mut vulkan_manager = Self::default();
-        vulkan_manager.init_entry();
-        vulkan_manager.init_instance(window)?;
-        vulkan_manager.init_surface(window)?;
-        vulkan_manager.init_device()?;
-        vulkan_manager.init_swapchain_manager()?;
-        Ok(vulkan_manager)
+    pub fn get_device(&self) -> Arc<Device> {
+        Arc::clone(&self.device)
     }
 
     pub fn create_shader_module(&self, shader: &[u32]) -> ShaderModule {
-        self.require_init_stage(VulkanInitStage::Device).unwrap();
-        ShaderModule::new(self.device.clone().unwrap(), shader)
+        ShaderModule::new(Arc::clone(&self.device), shader)
     }
 }
 

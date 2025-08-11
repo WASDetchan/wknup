@@ -4,17 +4,17 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use super::{VulkanManager, device::swapchain::SwapchainManager, shader::ShaderStageInfo};
+use super::{Vulkan, device::swapchain::SwapchainManager, shader::ShaderStageInfo};
 
 #[allow(dead_code)]
 pub struct PipelineManager {
-    vulkan: Arc<VulkanManager>,
+    vulkan: Arc<Vulkan>,
     swapchain: RwLock<SwapchainManager>,
     shader_stages: HashMap<String, ShaderStageInfo>,
 }
 
 impl PipelineManager {
-    pub fn init(vulkan: Arc<VulkanManager>, swapchain: RwLock<SwapchainManager>) -> Self {
+    pub fn init(vulkan: Arc<Vulkan>, swapchain: RwLock<SwapchainManager>) -> Self {
         Self {
             shader_stages: HashMap::new(),
             vulkan,

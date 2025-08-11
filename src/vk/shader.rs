@@ -4,9 +4,10 @@ use ash::vk;
 
 use super::device::Device;
 
+#[derive(Clone)]
 pub struct ShaderModule {
     device: Arc<Device>,
-    shader: vk::ShaderModule,
+    pub shader: vk::ShaderModule,
 }
 
 impl ShaderModule {
@@ -53,14 +54,15 @@ impl From<ShaderStage> for vk::ShaderStageFlags {
     }
 }
 
+#[derive(Clone)]
 pub struct ShaderStageInfo {
-    shader: Arc<ShaderModule>,
-    stage: ShaderStage,
-    entry_point: CString,
+    pub shader: ShaderModule,
+    pub stage: ShaderStage,
+    pub entry_point: CString,
 }
 
 impl ShaderStageInfo {
-    pub fn new(shader: Arc<ShaderModule>, stage: ShaderStage, entry_point: String) -> Self {
+    pub fn new(shader: ShaderModule, stage: ShaderStage, entry_point: String) -> Self {
         Self {
             stage,
             entry_point: CString::new(entry_point).expect("invalid entry_point"),

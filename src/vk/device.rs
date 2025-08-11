@@ -5,7 +5,8 @@ use std::{error::Error, ffi::CStr, sync::Arc};
 
 use ash::vk::{
     self, DeviceCreateInfo, DeviceQueueCreateInfo, ImageView, PhysicalDevice,
-    PhysicalDeviceProperties, Queue, ShaderModule, SwapchainCreateInfoKHR, SwapchainKHR,
+    PhysicalDeviceProperties, PipelineCache, Queue, ShaderModule, SwapchainCreateInfoKHR,
+    SwapchainKHR,
 };
 use device_extensions::DeviceExtensionManager;
 
@@ -197,6 +198,42 @@ impl Device {
             self.device
                 .create_pipeline_layout(&create_info, None)
                 .unwrap_or_else(|e| fatal_vk_error("failed to create pipeline layout", e))
+        }
+    }
+
+    pub fn destroy_pipeline_layout(&self, layout: vk::PipelineLayout) {
+        unsafe { self.device.destroy_pipeline_layout(layout, None) };
+    }
+    pub unsafe fn create_render_pass(
+        &self,
+        create_info: &vk::RenderPassCreateInfo,
+    ) -> Result<vk::RenderPass, vk::Result> {
+        unsafe { self.device.create_render_pass(create_info, None) }
+    }
+    pub unsafe fn destroy_render_pass(&self, render_pass: vk::RenderPass) {
+        unsafe {
+            self.device.destroy_render_pass(render_pass, None);
+        }
+    }
+
+    pub unsafe fn create_graphics_pipeline(
+        &self,
+        create_info: vk::GraphicsPipelineCreateInfo,
+    ) -> Result<vk::Pipeline, vk::Result> {
+        unsafe {
+            let result =
+                self.device
+                    .create_graphics_pipelines(PipelineCache::null(), &[create_info], None);
+            match result {
+                Ok(ps) => Ok(ps[0]),
+                Err(ps) => Err(ps.1),
+            }
+        }
+    }
+
+    pub unsafe fn destroy_pipeline(&self, pipeline: vk::Pipeline) {
+        unsafe {
+            self.device.destroy_pipeline(pipeline, None);
         }
     }
 }

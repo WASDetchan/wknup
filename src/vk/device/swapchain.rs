@@ -77,6 +77,9 @@ impl Swapchain {
         let scissor = vk::Rect2D::default().extent(self.extent);
         Ok((viewport, scissor))
     }
+    pub fn get_format(&self) -> SurfaceFormatKHR {
+        self.format
+    }
 }
 impl Drop for Swapchain {
     fn drop(&mut self) {

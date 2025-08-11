@@ -4,7 +4,6 @@ use ash::{
 };
 use device::{Device, DeviceBuilder, swapchain::SwapchainManager};
 use instance::{Instance, InstanceBuilder};
-use shader::ShaderModule;
 use std::{error::Error, sync::Arc};
 use surface::SurfaceManager;
 
@@ -87,16 +86,20 @@ pub struct Vulkan {
 }
 
 impl Vulkan {
-    pub fn get_swapchain_manager(&self) -> Arc<SwapchainManager> {
-        Arc::clone(&self.swapchain_manager)
+    pub fn get_entry(&self) -> Arc<Entry> {
+        Arc::clone(&self.entry)
     }
-
+    pub fn get_instance(&self) -> Arc<Instance> {
+        Arc::clone(&self.instance)
+    }
+    pub fn get_surface(&self) -> Arc<SurfaceManager> {
+        Arc::clone(&self.surface)
+    }
     pub fn get_device(&self) -> Arc<Device> {
         Arc::clone(&self.device)
     }
-
-    pub fn create_shader_module(&self, shader: &[u32]) -> ShaderModule {
-        ShaderModule::new(Arc::clone(&self.device), shader)
+    pub fn get_swapchain_manager(&self) -> Arc<SwapchainManager> {
+        Arc::clone(&self.swapchain_manager)
     }
 }
 

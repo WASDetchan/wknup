@@ -57,31 +57,49 @@ fn choose_transform(capabilities: SurfaceCapabilitiesKHR) -> SurfaceTransformFla
 
 #[allow(dead_code)]
 pub struct Swapchain {
+    device: Arc<Device>,
+    surface: Arc<SurfaceManager>,
     swapchain_khr: SwapchainKHR,
     extent: Extent2D,
     format: SurfaceFormatKHR,
     present_mode: PresentModeKHR,
-}
-
-pub struct SwapchainManager {
-    swapchain: Option<Swapchain>,
     images: Vec<vk::Image>,
     views: Vec<vk::ImageView>,
+}
+
+impl Swapchain {
+    pub fn make_viewport(&self) -> Result<(vk::Viewport, vk::Rect2D), InvalidSwapchainError> {
+        let Extent2D { width, height } = self.extent;
+        let viewport = vk::Viewport::default()
+            .width(width as f32)
+            .height(height as f32)
+            .max_depth(1.0f32);
+        let scissor = vk::Rect2D::default().extent(self.extent);
+        Ok((viewport, scissor))
+    }
+}
+impl Drop for Swapchain {
+    fn drop(&mut self) {
+        unsafe {
+            self.device.destroy_swapchain(self.swapchain_khr).unwrap();
+        }
+        for _ in 0..self.views.len() {
+            unsafe {
+                self.device.destroy_image_view(self.views.pop().unwrap());
+            }
+        }
+    }
+}
+pub struct SwapchainManager {
     device: Arc<Device>,
     surface: Arc<SurfaceManager>,
 }
 
 impl SwapchainManager {
     pub fn new(device: Arc<Device>, surface: Arc<SurfaceManager>) -> Self {
-        Self {
-            swapchain: None,
-            images: Vec::new(),
-            views: Vec::new(),
-            device,
-            surface,
-        }
+        Self { device, surface }
     }
-    pub fn create_swapchain(&mut self) -> Result<(), Box<dyn Error>> {
+    pub fn create_swapchain(&self) -> Result<Swapchain, Box<dyn Error>> {
         let surface_info = self.device.get_surface_info()?;
         let queue_family_indices = self.device.get_queue_family_indices();
 
@@ -116,17 +134,7 @@ impl SwapchainManager {
                 .queue_family_indices(&indices);
         }
         let swapchain_khr = self.device.create_swapchain(&swapchain_info)?;
-        self.swapchain = Some(Swapchain {
-            swapchain_khr,
-            format,
-            present_mode,
-            extent,
-        });
-
-        self.images = unsafe {
-            self.device
-                .get_swapchain_images(self.swapchain.as_ref().unwrap().swapchain_khr)
-        }?;
+        let images = unsafe { self.device.get_swapchain_images(swapchain_khr) }?;
 
         let view_info = ImageViewCreateInfo::default()
             .view_type(vk::ImageViewType::TYPE_2D)
@@ -138,8 +146,7 @@ impl SwapchainManager {
                     .aspect_mask(ImageAspectFlags::COLOR),
             );
 
-        self.views = self
-            .images
+        let views = images
             .iter()
             .map(|image| {
                 let info = view_info.image(*image);
@@ -147,38 +154,15 @@ impl SwapchainManager {
             })
             .collect();
 
-        Ok(())
-    }
-
-    pub fn make_viewport(&self) -> Result<(vk::Viewport, vk::Rect2D), InvalidSwapchainError> {
-        if self.swapchain.is_none() {
-            return Err(InvalidSwapchainError);
-        }
-
-        let extent = self.swapchain.as_ref().unwrap().extent;
-        let Extent2D { width, height } = extent;
-        let viewport = vk::Viewport::default()
-            .width(width as f32)
-            .height(height as f32)
-            .max_depth(1.0f32);
-        let scissor = vk::Rect2D::default().extent(extent);
-        Ok((viewport, scissor))
-    }
-}
-
-impl Drop for SwapchainManager {
-    fn drop(&mut self) {
-        if self.swapchain.is_some() {
-            unsafe {
-                self.device
-                    .destroy_swapchain(self.swapchain.as_mut().unwrap().swapchain_khr)
-                    .unwrap();
-            }
-            for _ in 0..self.views.len() {
-                unsafe {
-                    self.device.destroy_image_view(self.views.pop().unwrap());
-                }
-            }
-        }
+        Ok(Swapchain {
+            surface: Arc::clone(&self.surface),
+            device: Arc::clone(&self.device),
+            swapchain_khr,
+            images,
+            views,
+            format,
+            present_mode,
+            extent,
+        })
     }
 }

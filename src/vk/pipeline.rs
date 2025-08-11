@@ -1,20 +1,19 @@
 use ash::vk;
-use std::{
-    collections::HashMap,
-    sync::{Arc, RwLock},
-};
+use std::{collections::HashMap, sync::Arc};
 
-use super::{Vulkan, device::swapchain::SwapchainManager, shader::ShaderStageInfo};
+use crate::vk::device::swapchain::Swapchain;
+
+use super::{Vulkan, shader::ShaderStageInfo};
 
 #[allow(dead_code)]
 pub struct PipelineManager {
     vulkan: Arc<Vulkan>,
-    swapchain: RwLock<SwapchainManager>,
+    swapchain: Swapchain,
     shader_stages: HashMap<String, ShaderStageInfo>,
 }
 
 impl PipelineManager {
-    pub fn init(vulkan: Arc<Vulkan>, swapchain: RwLock<SwapchainManager>) -> Self {
+    pub fn init(vulkan: Arc<Vulkan>, swapchain: Swapchain) -> Self {
         Self {
             shader_stages: HashMap::new(),
             vulkan,
@@ -35,7 +34,7 @@ impl PipelineManager {
         let _input_assembly_state = vk::PipelineInputAssemblyStateCreateInfo::default()
             .topology(vk::PrimitiveTopology::TRIANGLE_LIST);
 
-        let (_viewport, _scissor) = self.swapchain.read().unwrap().make_viewport()?;
+        let (_viewport, _scissor) = self.swapchain.make_viewport()?;
         let _viewport_state = vk::PipelineViewportStateCreateInfo::default()
             .viewport_count(1)
             .scissor_count(1);

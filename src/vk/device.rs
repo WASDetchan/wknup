@@ -3,25 +3,102 @@ pub mod swapchain;
 
 use std::{error::Error, ffi::CStr, sync::Arc};
 
-use ash::{
-    Device,
-    vk::{
-        self, DeviceCreateInfo, DeviceQueueCreateInfo, ImageView, PhysicalDevice,
-        PhysicalDeviceProperties, Queue, ShaderModule, SwapchainCreateInfoKHR, SwapchainKHR,
-    },
+use ash::vk::{
+    self, DeviceCreateInfo, DeviceQueueCreateInfo, ImageView, PhysicalDevice,
+    PhysicalDeviceProperties, Queue, ShaderModule, SwapchainCreateInfoKHR, SwapchainKHR,
 };
 use device_extensions::DeviceExtensionManager;
 
 use super::{
-    VulkanInitStage, VulkanInitStageError,
     error::fatal_vk_error,
     instance::{Instance, surface::SurfaceInstance},
     physical_device::{
-        self, PhysicalDeviceSurfaceInfo, QueueFamilyIndices,
+        self, PhysicalDeviceChoice, PhysicalDeviceSurfaceInfo, QueueFamilyIndices,
         features::{FeaturesInfo, PhysicalDeviceFeatures2},
     },
     surface::SurfaceManager,
 };
+
+pub struct DeviceBuilder {
+    queue_family_indices: QueueFamilyIndices,
+    instance: Arc<Instance>,
+    surface: Arc<SurfaceManager>,
+}
+
+impl DeviceBuilder {
+    pub fn new(instance: Arc<Instance>, surface: Arc<SurfaceManager>) -> Self {
+        Self {
+            queue_family_indices: QueueFamilyIndices::default(instance.clone(), unsafe {
+                surface.raw_handle()
+            }),
+            instance,
+            surface,
+        }
+    }
+
+    pub fn build(self) -> Result<Device, Box<dyn Error>> {
+        let PhysicalDeviceChoice {
+            queue_family_indices,
+            device: physical_device,
+        } = physical_device::choose_physical_device(
+            &self.instance,
+            self.queue_family_indices.clone(),
+        )?;
+
+        let graphic_present_match =
+            queue_family_indices.graphics.unwrap() == queue_family_indices.present.unwrap();
+
+        let graphic_info = DeviceQueueCreateInfo::default()
+            .queue_family_index(queue_family_indices.graphics.unwrap() as u32)
+            .queue_priorities(&[0.0f32]);
+        let present_info = DeviceQueueCreateInfo::default()
+            .queue_family_index(queue_family_indices.present.unwrap() as u32)
+            .queue_priorities(&[0.0f32]);
+
+        let queue_infos = if graphic_present_match {
+            vec![graphic_info]
+        } else {
+            vec![graphic_info, present_info]
+        };
+
+        let features2 = PhysicalDeviceFeatures2::new_required();
+
+        let device_features = features2.features();
+        let mut next = features2.next();
+
+        let mut device_extension_manager =
+            DeviceExtensionManager::init(&self.instance, physical_device)?;
+        device_extension_manager.add_extensions(&REQUIRED_DEVICE_EXTENSIONS)?;
+        let ext_names = device_extension_manager.list_names();
+
+        let device_info = DeviceCreateInfo::default()
+            .queue_create_infos(&queue_infos)
+            .enabled_features(&device_features)
+            .enabled_extension_names(&ext_names)
+            .push_next(&mut next);
+
+        let device = unsafe { self.instance.create_device(physical_device, &device_info) }?;
+
+        let graphic_queue =
+            unsafe { device.get_device_queue(queue_family_indices.graphics.unwrap() as u32, 0) };
+        let present_queue =
+            unsafe { device.get_device_queue(queue_family_indices.present.unwrap() as u32, 0) };
+
+        let queues = Queues {
+            graphics: graphic_queue,
+            present: present_queue,
+        };
+
+        Ok(Device {
+            instance: self.instance,
+            surface: self.surface,
+            physical_device,
+            queue_family_indices,
+            device,
+            queues,
+        })
+    }
+}
 
 pub const REQUIRED_DEVICE_EXTENSIONS: [&CStr; 2] =
     [c"VK_KHR_swapchain", c"VK_KHR_vulkan_memory_model"];
@@ -37,127 +114,31 @@ pub struct PhysicalDeviceInfo {
     pub features: FeaturesInfo,
 }
 
-pub struct DeviceManager {
-    physical_device: Option<PhysicalDevice>,
-    queue_family_indices: QueueFamilyIndices,
+pub struct Device {
     instance: Arc<Instance>,
-    device: Option<Device>,
-    queues: Option<Queues>,
     surface: Arc<SurfaceManager>,
+    physical_device: PhysicalDevice,
+    queue_family_indices: QueueFamilyIndices,
+    device: ash::Device,
+    queues: Queues,
 }
-impl DeviceManager {
-    fn new(instance: Arc<Instance>, surface: Arc<SurfaceManager>) -> Self {
-        Self {
-            physical_device: None,
-            queue_family_indices: QueueFamilyIndices::default(instance.clone(), unsafe {
-                surface.raw_handle()
-            }),
-            instance,
-            device: None,
-            queues: None,
-            surface,
-        }
-    }
-
-    fn init_physical_device(&mut self) -> Result<(), Box<dyn Error>> {
-        let qfi = self.queue_family_indices.clone();
-        let chosen = physical_device::choose_physical_device(&self.instance, qfi)?;
-        self.queue_family_indices = chosen.queue_family_indices;
-        self.physical_device = Some(chosen.device);
-        Ok(())
-    }
-
-    fn init_device(&mut self) -> Result<(), Box<dyn Error>> {
-        if self.physical_device.is_none() {
-            return Err("cannot init device before physical_device is inited".into());
-        }
-        let qfi = &self.queue_family_indices;
-
-        let graphic_present_match = qfi.graphics.unwrap() == qfi.present.unwrap();
-
-        let graphic_info = DeviceQueueCreateInfo::default()
-            .queue_family_index(qfi.graphics.unwrap() as u32)
-            .queue_priorities(&[0.0f32]);
-        let present_info = DeviceQueueCreateInfo::default()
-            .queue_family_index(qfi.present.unwrap() as u32)
-            .queue_priorities(&[0.0f32]);
-
-        let queue_infos = if graphic_present_match {
-            vec![graphic_info]
-        } else {
-            vec![graphic_info, present_info]
-        };
-
-        let features2 = PhysicalDeviceFeatures2::new_required();
-
-        let device_features = features2.features();
-        let mut next = features2.next();
-
-        let mut device_extension_manager =
-            DeviceExtensionManager::init(&self.instance, self.physical_device.unwrap())?;
-        device_extension_manager.add_extensions(&REQUIRED_DEVICE_EXTENSIONS)?;
-        let ext_names = device_extension_manager.list_names();
-
-        let device_info = DeviceCreateInfo::default()
-            .queue_create_infos(&queue_infos)
-            .enabled_features(&device_features)
-            .enabled_extension_names(&ext_names)
-            .push_next(&mut next);
-        let Some(physical_device) = self.physical_device else {
-            return Err("cannot init device before physical device is initialized".into());
-        };
-        self.device = Some(unsafe { self.instance.create_device(physical_device, &device_info) }?);
-        Ok(())
-    }
-
-    fn init_queues(&mut self) {
-        let qfi = &self.queue_family_indices;
-        let device = self.device.as_ref().unwrap();
-
-        let graphic_queue = unsafe { device.get_device_queue(qfi.graphics.unwrap() as u32, 0) };
-        let present_queue = unsafe { device.get_device_queue(qfi.present.unwrap() as u32, 0) };
-
-        let queues = Queues {
-            graphics: graphic_queue,
-            present: present_queue,
-        };
-        self.queues = Some(queues);
-    }
-
-    pub fn init(
-        instance: Arc<Instance>,
-        surface: Arc<SurfaceManager>,
-    ) -> Result<Self, Box<dyn Error>> {
-        let mut device_manager = Self::new(instance, surface);
-        device_manager.init_physical_device()?;
-        device_manager.init_device()?;
-        device_manager.init_queues();
-
-        Ok(device_manager)
-    }
-
+impl Device {
     pub fn create_swapchain(
         &self,
         create_info: &SwapchainCreateInfoKHR,
     ) -> Result<SwapchainKHR, Box<dyn Error>> {
-        let Some(device) = self.device.as_ref() else {
-            return Err("cannot create swapchain before device is initialized".into());
-        };
-        unsafe { self.instance.create_swapchain(device, create_info) }
+        unsafe { self.instance.create_swapchain(&self.device, create_info) }
     }
 
-    pub fn get_surface_info(&self) -> Result<PhysicalDeviceSurfaceInfo, Box<dyn Error>> {
-        if self.physical_device.is_none() {
-            return Err("cannot query surface info before physical_device is chosen".into());
-        }
+    pub fn get_surface_info(&self) -> Result<PhysicalDeviceSurfaceInfo, vk::Result> {
         let surface_instance = Arc::new(SurfaceInstance::new(self.instance.clone()));
-        Ok(unsafe {
+        unsafe {
             physical_device::query_device_surface_info(
                 surface_instance,
-                self.physical_device.unwrap(),
+                self.physical_device,
                 self.surface.raw_handle(),
             )
-        }?)
+        }
     }
 
     pub fn get_queue_family_indices(&self) -> QueueFamilyIndices {
@@ -165,108 +146,61 @@ impl DeviceManager {
     }
 
     pub unsafe fn destroy_swapchain(&self, swapchain: SwapchainKHR) -> Result<(), Box<dyn Error>> {
-        unsafe {
-            self.instance
-                .destroy_swapchain(self.device.as_ref().unwrap(), swapchain)
-        }
+        unsafe { self.instance.destroy_swapchain(&self.device, swapchain) }
     }
 
     fn destroy_device(&mut self) {
-        if let Some(device) = self.device.as_ref() {
-            unsafe { device.destroy_device(None) };
-        }
+        unsafe { self.device.destroy_device(None) };
     }
 
     pub unsafe fn get_swapchain_images(
         &self,
         swapchain: SwapchainKHR,
     ) -> Result<Vec<vk::Image>, Box<dyn Error>> {
-        let Some(device) = self.device.as_ref() else {
-            return Err("cannot get_swapchain_images before device is initialized".into());
-        };
-        let images = unsafe { self.instance.get_swapchain_images(device, swapchain) }?;
-
-        Ok(images)
+        unsafe { self.instance.get_swapchain_images(&self.device, swapchain) }
     }
 
-    pub unsafe fn create_image_view(
-        &self,
-        create_info: &vk::ImageViewCreateInfo,
-    ) -> Result<vk::ImageView, VulkanInitStageError> {
-        if self.device.is_none() {
-            return Err(VulkanInitStageError::new(VulkanInitStage::Device));
-        }
-        let view = unsafe {
+    pub unsafe fn create_image_view(&self, create_info: &vk::ImageViewCreateInfo) -> vk::ImageView {
+        unsafe {
             self.device
-                .clone()
-                .unwrap()
                 .create_image_view(create_info, None)
                 .unwrap_or_else(|e| fatal_vk_error("failed to create_image_view", e))
-        };
-        Ok(view)
+        }
     }
 
-    pub unsafe fn destroy_image_view(&self, view: ImageView) -> Result<(), VulkanInitStageError> {
-        if self.device.is_none() {
-            return Err(VulkanInitStageError::new(VulkanInitStage::Device));
-        }
+    pub unsafe fn destroy_image_view(&self, view: ImageView) {
         unsafe {
-            self.device.as_ref().unwrap().destroy_image_view(view, None);
+            self.device.destroy_image_view(view, None);
         }
-        Ok(())
     }
 
-    pub unsafe fn create_shader_module(
-        &self,
-        shader: &[u32],
-    ) -> Result<ShaderModule, VulkanInitStageError> {
-        if self.device.is_none() {
-            return Err(VulkanInitStageError::new(VulkanInitStage::Device));
-        }
+    pub unsafe fn create_shader_module(&self, shader: &[u32]) -> ShaderModule {
         let create_info = vk::ShaderModuleCreateInfo::default().code(shader);
-        Ok(unsafe {
+        unsafe {
             self.device
-                .as_ref()
-                .unwrap()
                 .create_shader_module(&create_info, None)
                 .unwrap_or_else(|e| fatal_vk_error("failed to create_shader_module", e))
-        })
+        }
     }
 
-    pub unsafe fn destroy_shader_module(
-        &self,
-        shader: vk::ShaderModule,
-    ) -> Result<(), VulkanInitStageError> {
-        if self.device.is_none() {
-            return Err(VulkanInitStageError::new(VulkanInitStage::Device));
-        }
+    pub unsafe fn destroy_shader_module(&self, shader: vk::ShaderModule) {
         unsafe {
-            self.device
-                .as_ref()
-                .unwrap()
-                .destroy_shader_module(shader, None);
+            self.device.destroy_shader_module(shader, None);
         }
-        Ok(())
     }
 
     pub fn create_pipeline_layout(
         &self,
         create_info: vk::PipelineLayoutCreateInfo,
-    ) -> Result<vk::PipelineLayout, VulkanInitStageError> {
-        if self.device.is_none() {
-            return Err(VulkanInitStageError::new(VulkanInitStage::Device));
-        }
-
-        Ok(unsafe {
+    ) -> vk::PipelineLayout {
+        unsafe {
             self.device
-                .as_ref()
-                .unwrap()
                 .create_pipeline_layout(&create_info, None)
                 .unwrap_or_else(|e| fatal_vk_error("failed to create pipeline layout", e))
-        })
+        }
     }
 }
-impl Drop for DeviceManager {
+impl Drop for Device {
     fn drop(&mut self) {
         self.destroy_device();
     }

@@ -2,17 +2,17 @@ use std::{ffi::CString, sync::Arc};
 
 use ash::vk;
 
-use super::device::DeviceManager;
+use super::device::Device;
 
 pub struct ShaderModule {
-    device: Arc<DeviceManager>,
+    device: Arc<Device>,
     shader: vk::ShaderModule,
 }
 
 impl ShaderModule {
-    pub fn new(device: Arc<DeviceManager>, shader_raw: &[u32]) -> Self {
+    pub fn new(device: Arc<Device>, shader_raw: &[u32]) -> Self {
         Self {
-            shader: unsafe { device.create_shader_module(shader_raw).unwrap() },
+            shader: unsafe { device.create_shader_module(shader_raw) },
             device,
         }
     }
@@ -21,7 +21,7 @@ impl ShaderModule {
 impl Drop for ShaderModule {
     fn drop(&mut self) {
         unsafe {
-            self.device.destroy_shader_module(self.shader).unwrap();
+            self.device.destroy_shader_module(self.shader);
         }
     }
 }

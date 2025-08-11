@@ -6,11 +6,9 @@ use ash::vk::{
     SurfaceFormatKHR, SurfaceTransformFlagsKHR, SwapchainCreateInfoKHR, SwapchainKHR,
 };
 
-use crate::vk::{
-    VulkanInitStageError, physical_device::PhysicalDeviceSurfaceInfo, surface::SurfaceManager,
-};
+use crate::vk::{physical_device::PhysicalDeviceSurfaceInfo, surface::SurfaceManager};
 
-use super::DeviceManager;
+use super::Device;
 use thiserror;
 
 #[derive(Debug, thiserror::Error)]
@@ -69,12 +67,12 @@ pub struct SwapchainManager {
     swapchain: Option<Swapchain>,
     images: Vec<vk::Image>,
     views: Vec<vk::ImageView>,
-    device: Arc<DeviceManager>,
+    device: Arc<Device>,
     surface: Arc<SurfaceManager>,
 }
 
 impl SwapchainManager {
-    pub fn new(device: Arc<DeviceManager>, surface: Arc<SurfaceManager>) -> Self {
+    pub fn new(device: Arc<Device>, surface: Arc<SurfaceManager>) -> Self {
         Self {
             swapchain: None,
             images: Vec::new(),
@@ -140,7 +138,7 @@ impl SwapchainManager {
                     .aspect_mask(ImageAspectFlags::COLOR),
             );
 
-        let views: Vec<Result<vk::ImageView, VulkanInitStageError>> = self
+        self.views = self
             .images
             .iter()
             .map(|image| {
@@ -148,13 +146,6 @@ impl SwapchainManager {
                 unsafe { self.device.create_image_view(&info) }
             })
             .collect();
-
-        if let Some(Err(e)) = views.iter().find(|v| v.is_err()) {
-            return Err(Box::new(e.clone()));
-        }
-        let views = views.into_iter().map(|v| v.unwrap()).collect();
-
-        self.views = views;
 
         Ok(())
     }
@@ -185,9 +176,7 @@ impl Drop for SwapchainManager {
             }
             for _ in 0..self.views.len() {
                 unsafe {
-                    self.device
-                        .destroy_image_view(self.views.pop().unwrap())
-                        .unwrap();
+                    self.device.destroy_image_view(self.views.pop().unwrap());
                 }
             }
         }

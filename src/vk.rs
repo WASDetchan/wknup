@@ -2,7 +2,7 @@ use ash::{
     Entry,
     vk::{self},
 };
-use device::{DeviceManager, swapchain::SwapchainManager};
+use device::{Device, DeviceBuilder, swapchain::SwapchainManager};
 use instance::{Instance, InstanceBuilder};
 use shader::ShaderModule;
 use std::{error::Error, sync::Arc};
@@ -45,7 +45,7 @@ pub struct VulkanManager {
     entry: Option<Arc<Entry>>,
     instance: Option<Arc<Instance>>,
     surface_manager: Option<Arc<SurfaceManager>>,
-    device_manager: Option<Arc<DeviceManager>>,
+    device: Option<Arc<Device>>,
     swapchain_manager: Option<Arc<SwapchainManager>>,
 }
 
@@ -55,7 +55,7 @@ impl VulkanManager {
             VulkanInitStage::Entry => self.entry.is_none(),
             VulkanInitStage::Instance => self.instance.is_none(),
             VulkanInitStage::Surface => self.surface_manager.is_none(),
-            VulkanInitStage::Device => self.device_manager.is_none(),
+            VulkanInitStage::Device => self.device.is_none(),
             VulkanInitStage::SwapchainManager => self.swapchain_manager.is_none(),
         } {
             Err(VulkanInitStageError::new(stage))
@@ -96,10 +96,13 @@ impl VulkanManager {
     fn init_device(&mut self) -> Result<(), Box<dyn Error>> {
         self.require_init_stage(VulkanInitStage::Instance)?;
         self.require_init_stage(VulkanInitStage::Surface)?;
-        self.device_manager = Some(Arc::new(DeviceManager::init(
-            self.instance.clone().unwrap(),
-            self.surface_manager.clone().unwrap(),
-        )?));
+        self.device = Some(Arc::new(
+            DeviceBuilder::new(
+                self.instance.clone().unwrap(),
+                self.surface_manager.clone().unwrap(),
+            )
+            .build()?,
+        ));
         Ok(())
     }
 
@@ -108,7 +111,7 @@ impl VulkanManager {
         self.require_init_stage(VulkanInitStage::Surface)?;
 
         let swapchain_manager = Arc::new(SwapchainManager::new(
-            self.device_manager.clone().unwrap(),
+            self.device.clone().unwrap(),
             self.surface_manager.clone().unwrap(),
         ));
         self.swapchain_manager = Some(swapchain_manager);
@@ -120,9 +123,9 @@ impl VulkanManager {
         Ok(self.swapchain_manager.clone().unwrap())
     }
 
-    pub fn get_device_manager(&self) -> Result<Arc<DeviceManager>, VulkanInitStageError> {
+    pub fn get_device(&self) -> Result<Arc<Device>, VulkanInitStageError> {
         self.require_init_stage(VulkanInitStage::Device)?;
-        Ok(self.device_manager.clone().unwrap())
+        Ok(self.device.clone().unwrap())
     }
 
     pub fn init(window: &WindowManager) -> Result<Self, Box<dyn Error>> {
@@ -137,7 +140,7 @@ impl VulkanManager {
 
     pub fn create_shader_module(&self, shader: &[u32]) -> ShaderModule {
         self.require_init_stage(VulkanInitStage::Device).unwrap();
-        ShaderModule::new(self.device_manager.clone().unwrap(), shader)
+        ShaderModule::new(self.device.clone().unwrap(), shader)
     }
 }
 

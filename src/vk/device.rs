@@ -15,7 +15,7 @@ use device_extensions::DeviceExtensionManager;
 use super::{
     VulkanInitStage, VulkanInitStageError,
     error::fatal_vk_error,
-    instance::InstanceManager,
+    instance::Instance,
     physical_device::{
         self, PhysicalDeviceSurfaceInfo, QueueFamilyIndices,
         features::{FeaturesInfo, PhysicalDeviceFeatures2},
@@ -40,13 +40,13 @@ pub struct PhysicalDeviceInfo {
 pub struct DeviceManager {
     physical_device: Option<PhysicalDevice>,
     queue_family_indices: QueueFamilyIndices,
-    instance: Arc<InstanceManager>,
+    instance: Arc<Instance>,
     device: Option<Device>,
     queues: Option<Queues>,
     surface: Arc<SurfaceManager>,
 }
 impl DeviceManager {
-    fn new(instance: Arc<InstanceManager>, surface: Arc<SurfaceManager>) -> Self {
+    fn new(instance: Arc<Instance>, surface: Arc<SurfaceManager>) -> Self {
         Self {
             physical_device: None,
             queue_family_indices: QueueFamilyIndices::default(instance.clone(), unsafe {
@@ -106,7 +106,7 @@ impl DeviceManager {
         let Some(physical_device) = self.physical_device else {
             return Err("cannot init device before physical device is initialized".into());
         };
-        self.device = Some(self.instance.create_device(physical_device, &device_info)?);
+        self.device = Some(unsafe { self.instance.create_device(physical_device, &device_info) }?);
         Ok(())
     }
 
@@ -125,7 +125,7 @@ impl DeviceManager {
     }
 
     pub fn init(
-        instance: Arc<InstanceManager>,
+        instance: Arc<Instance>,
         surface: Arc<SurfaceManager>,
     ) -> Result<Self, Box<dyn Error>> {
         let mut device_manager = Self::new(instance, surface);
@@ -150,11 +150,13 @@ impl DeviceManager {
         if self.physical_device.is_none() {
             return Err("cannot query surface info before physical_device is chosen".into());
         }
-        physical_device::query_device_surface_info(
-            &self.instance,
-            self.physical_device.unwrap(),
-            unsafe { self.surface.raw_handle() },
-        )
+        Ok(unsafe {
+            physical_device::query_device_surface_info(
+                &self.instance,
+                self.physical_device.unwrap(),
+                self.surface.raw_handle(),
+            )
+        }?)
     }
 
     pub fn get_queue_family_indices(&self) -> QueueFamilyIndices {

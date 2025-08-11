@@ -3,13 +3,13 @@ pub mod features;
 use std::{error::Error, sync::Arc, vec::IntoIter};
 
 use ash::vk::{
-    PhysicalDevice, PhysicalDeviceType, PresentModeKHR, QueueFamilyProperties, QueueFlags,
+    self, PhysicalDevice, PhysicalDeviceType, PresentModeKHR, QueueFamilyProperties, QueueFlags,
     SurfaceCapabilitiesKHR, SurfaceFormatKHR, SurfaceKHR,
 };
 
 use super::{
     device::{self, device_extensions, swapchain},
-    instance::InstanceManager,
+    instance::Instance,
 };
 
 type QFFilter = Arc<dyn Fn(PhysicalDevice, usize, &QueueFamilyProperties) -> bool + Send + Sync>;
@@ -22,18 +22,19 @@ pub struct QueueFamilyIndices {
 }
 
 fn filter_present_qf(
-    instance: &Arc<InstanceManager>,
+    instance: &Arc<Instance>,
     surface: SurfaceKHR,
     device: PhysicalDevice,
     id: usize,
     _props: &QueueFamilyProperties,
 ) -> bool {
-    let support = instance.get_physical_device_surface_support(device, id as u32, surface);
+    let support =
+        unsafe { instance.get_physical_device_surface_support(device, id as u32, surface) };
     if !support.is_ok_and(|s| s) {
         return false;
     }
 
-    let surface_info = query_device_surface_info(instance, device, surface).unwrap();
+    let surface_info = unsafe { query_device_surface_info(instance, device, surface).unwrap() };
     if !swapchain::check_surface_info(surface_info) {
         return false;
     }
@@ -66,7 +67,7 @@ impl QueueFamilyIndices {
             self.present = Some(id);
         }
     }
-    fn fill(&mut self, instance: &Arc<InstanceManager>, physical_device: PhysicalDevice) {
+    fn fill(&mut self, instance: &Arc<Instance>, physical_device: PhysicalDevice) {
         Self::iterate_physical_device_queue_families(instance, physical_device)
             .enumerate()
             .for_each(|(id, prop)| self.try_queue(physical_device, id, &prop));
@@ -75,15 +76,12 @@ impl QueueFamilyIndices {
         self.graphics.is_some() && self.present.is_some()
     }
     fn iterate_physical_device_queue_families(
-        instance: &Arc<InstanceManager>,
+        instance: &Arc<Instance>,
         physical_device: PhysicalDevice,
     ) -> IntoIter<QueueFamilyProperties> {
-        instance
-            .get_physical_device_queue_family_properties(physical_device)
-            .unwrap()
-            .into_iter()
+        unsafe { instance.get_physical_device_queue_family_properties(physical_device) }.into_iter()
     }
-    pub fn default(instance: Arc<InstanceManager>, surface_khr: SurfaceKHR) -> QueueFamilyIndices {
+    pub fn default(instance: Arc<Instance>, surface_khr: SurfaceKHR) -> QueueFamilyIndices {
         QueueFamilyIndices::new(
             Arc::new(filter_graphic_qf),
             Arc::new(move |device, id, props| {
@@ -92,12 +90,12 @@ impl QueueFamilyIndices {
         )
     }
 }
-fn rate_physical_device(
-    instance: &Arc<InstanceManager>,
+unsafe fn rate_physical_device(
+    instance: &Arc<Instance>,
     device: PhysicalDevice,
     mut qfi: QueueFamilyIndices,
 ) -> i32 {
-    let info = instance.get_physical_device_info(device).unwrap();
+    let info = unsafe { instance.get_physical_device_info(device) };
     let props = info.properties;
     let features = info.features;
 
@@ -113,14 +111,6 @@ fn rate_physical_device(
         return 0;
     }
 
-    // if !features.vulkan_memory_model {
-    //     return 0;
-    // }
-    //
-    // if features.features.geometry_shader != 1 {
-    //     return 0;
-    // }
-    //
     if features.check_required().is_err() {
         return 0;
     }
@@ -133,8 +123,8 @@ fn rate_physical_device(
 }
 
 fn iterate_physical_devices(
-    instance: &Arc<InstanceManager>,
-) -> Result<IntoIter<PhysicalDevice>, Box<dyn Error>> {
+    instance: &Arc<Instance>,
+) -> Result<IntoIter<PhysicalDevice>, vk::Result> {
     Ok(instance.enumerate_physical_devices()?.into_iter())
 }
 
@@ -143,19 +133,19 @@ pub struct PhysicalDeviceChoice {
     pub queue_family_indices: QueueFamilyIndices,
 }
 pub fn choose_physical_device(
-    instance: &Arc<InstanceManager>,
+    instance: &Arc<Instance>,
     mut queue_family_indices: QueueFamilyIndices,
 ) -> Result<PhysicalDeviceChoice, Box<dyn Error>> {
     let physical_device = iterate_physical_devices(instance)?
         .map(|pdev| {
             (
-                rate_physical_device(instance, pdev, queue_family_indices.clone()),
+                unsafe { rate_physical_device(instance, pdev, queue_family_indices.clone()) },
                 pdev,
             )
         })
         .max_by_key(|s| s.0);
     let Some(physical_device) = physical_device else {
-        return Err("No physical device found.".into());
+        return Err("No physical device found.".into()); // TODO:: fix error handling 
     };
     if physical_device.0 <= 0 {
         return Err("No suitable physical device found.".into());
@@ -168,12 +158,12 @@ pub fn choose_physical_device(
     })
 }
 
-pub fn query_device_surface_info(
-    instance: &Arc<InstanceManager>,
+pub unsafe fn query_device_surface_info(
+    instance: &Arc<Instance>,
     device: PhysicalDevice,
     surface: SurfaceKHR,
-) -> Result<PhysicalDeviceSurfaceInfo, Box<dyn Error>> {
-    instance.get_physical_device_surface_info(device, surface)
+) -> Result<PhysicalDeviceSurfaceInfo, vk::Result> {
+    unsafe { instance.get_physical_device_surface_info(device, surface) }
 }
 
 pub struct PhysicalDeviceSurfaceInfo {

@@ -1,5 +1,5 @@
-use crate::vk::instance::InstanceManager;
-use std::{error::Error, sync::Arc};
+use crate::vk::instance::Instance;
+use std::sync::Arc;
 
 use ash::vk::SurfaceKHR;
 use sdl3::{self, Sdl, VideoSubsystem, video::Window};
@@ -28,12 +28,8 @@ impl WindowManager {
         }
     }
 
-    pub fn create_surface(
-        &self,
-        instance: &Arc<InstanceManager>,
-    ) -> Result<SurfaceKHR, Box<dyn Error>> {
-        let surface = instance.create_surface(&self.window)?;
-        Ok(surface)
+    pub fn create_surface(&self, instance: &Arc<Instance>) -> Result<SurfaceKHR, sdl3::Error> {
+        instance.create_surface(&self.window)
     }
 
     pub fn get_vk_extensions(&self) -> Result<Vec<String>, sdl3::Error> {

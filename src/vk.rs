@@ -3,7 +3,7 @@ use ash::{
     vk::{self},
 };
 use device::{DeviceManager, swapchain::SwapchainManager};
-use instance::InstanceManager;
+use instance::{Instance, InstanceBuilder};
 use shader::ShaderModule;
 use std::{error::Error, sync::Arc};
 use surface::SurfaceManager;
@@ -43,7 +43,7 @@ impl VulkanInitStageError {
 #[derive(Default)]
 pub struct VulkanManager {
     entry: Option<Arc<Entry>>,
-    instance_manager: Option<Arc<InstanceManager>>,
+    instance: Option<Arc<Instance>>,
     surface_manager: Option<Arc<SurfaceManager>>,
     device_manager: Option<Arc<DeviceManager>>,
     swapchain_manager: Option<Arc<SwapchainManager>>,
@@ -53,7 +53,7 @@ impl VulkanManager {
     fn require_init_stage(&self, stage: VulkanInitStage) -> Result<(), VulkanInitStageError> {
         if match stage {
             VulkanInitStage::Entry => self.entry.is_none(),
-            VulkanInitStage::Instance => self.instance_manager.is_none(),
+            VulkanInitStage::Instance => self.instance.is_none(),
             VulkanInitStage::Surface => self.surface_manager.is_none(),
             VulkanInitStage::Device => self.device_manager.is_none(),
             VulkanInitStage::SwapchainManager => self.swapchain_manager.is_none(),
@@ -73,14 +73,14 @@ impl VulkanManager {
 
         let wm_required_extensions = window.get_vk_extensions()?;
 
-        let mut instance_manager = InstanceManager::init(self.entry.clone().unwrap())
+        let instance = InstanceBuilder::new(self.entry.clone().unwrap())
             .extensions(wm_required_extensions)
             .validation_layers(vec![String::from("VK_LAYER_KHRONOS_validation")])
             .application_props(String::from("WKNUP"), 1)
-            .api_version(vk::make_api_version(0, 1, 1, 0));
-        instance_manager.init_instance()?;
+            .api_version(vk::make_api_version(0, 1, 1, 0))
+            .build()?;
 
-        self.instance_manager = Some(Arc::new(instance_manager));
+        self.instance = Some(Arc::new(instance));
 
         Ok(())
     }
@@ -88,7 +88,7 @@ impl VulkanManager {
     fn init_surface(&mut self, window: &WindowManager) -> Result<(), Box<dyn Error>> {
         self.require_init_stage(VulkanInitStage::Instance)?;
         self.surface_manager = Some(Arc::new(SurfaceManager::init(
-            self.instance_manager.clone().unwrap(),
+            self.instance.clone().unwrap(),
             window,
         )?));
         Ok(())
@@ -97,7 +97,7 @@ impl VulkanManager {
         self.require_init_stage(VulkanInitStage::Instance)?;
         self.require_init_stage(VulkanInitStage::Surface)?;
         self.device_manager = Some(Arc::new(DeviceManager::init(
-            self.instance_manager.clone().unwrap(),
+            self.instance.clone().unwrap(),
             self.surface_manager.clone().unwrap(),
         )?));
         Ok(())

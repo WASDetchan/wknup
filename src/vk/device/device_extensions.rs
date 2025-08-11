@@ -7,9 +7,9 @@ use std::{
     sync::Arc,
 };
 
-use ash::vk::PhysicalDevice;
+use ash::vk::{self, PhysicalDevice};
 
-use crate::vk::instance::InstanceManager;
+use crate::vk::instance::Instance;
 
 #[derive(Debug)]
 pub struct DeviceExtensionUnavailableError {
@@ -42,12 +42,8 @@ pub struct DeviceExtensionManager {
 }
 
 impl DeviceExtensionManager {
-    pub fn init(
-        instance: &Arc<InstanceManager>,
-        device: PhysicalDevice,
-    ) -> Result<Self, Box<dyn Error>> {
-        let available = instance
-            .enumerate_device_extension_properties(device)?
+    pub fn init(instance: &Arc<Instance>, device: PhysicalDevice) -> Result<Self, vk::Result> {
+        let available = unsafe { instance.enumerate_device_extension_properties(device) }?
             .into_iter()
             .map(|ext| ext.extension_name_as_c_str().unwrap().to_owned())
             .collect::<HashSet<CString>>();
@@ -84,7 +80,7 @@ impl DeviceExtensionManager {
 }
 
 pub fn check_extensions<T: AsRef<CStr>>(
-    instance: &Arc<InstanceManager>,
+    instance: &Arc<Instance>,
     device: PhysicalDevice,
     extensions: &[T],
 ) -> Result<(), Box<dyn Error>> {

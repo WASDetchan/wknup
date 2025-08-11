@@ -7,9 +7,7 @@ use ash::vk::{
 };
 
 use crate::vk::{
-    VulkanInitStage, VulkanInitStageError,
-    physical_device::{PhysicalDeviceSurfaceInfo, QueueFamilyIndices},
-    surface::SurfaceManager,
+    VulkanInitStageError, physical_device::PhysicalDeviceSurfaceInfo, surface::SurfaceManager,
 };
 
 use super::DeviceManager;
@@ -59,7 +57,8 @@ fn choose_transform(capabilities: SurfaceCapabilitiesKHR) -> SurfaceTransformFla
     capabilities.current_transform
 }
 
-struct Swapchain {
+#[allow(dead_code)]
+pub struct Swapchain {
     swapchain_khr: SwapchainKHR,
     extent: Extent2D,
     format: SurfaceFormatKHR,
@@ -86,7 +85,7 @@ impl SwapchainManager {
     }
     pub fn create_swapchain(&mut self) -> Result<(), Box<dyn Error>> {
         let surface_info = self.device.get_surface_info()?;
-        let queue_family_indices = self.device_manager.get_queue_family_indices();
+        let queue_family_indices = self.device.get_queue_family_indices();
 
         let graphic = queue_family_indices.graphics.unwrap();
         let present = queue_family_indices.present.unwrap();

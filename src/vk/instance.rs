@@ -222,6 +222,10 @@ impl InstanceManager {
         Ok(swapchain)
     }
 
+    ///
+    /// # Safety
+    /// device and swapchain should be valid
+    ///
     pub unsafe fn get_swapchain_images(
         &self,
         device: &Device,

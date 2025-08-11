@@ -120,7 +120,7 @@ impl VulkanManager {
         Ok(self.swapchain_manager.clone().unwrap())
     }
 
-    pub fn get_device_manager(&self) -> Result<Arc<DeviceManager, VulkanInitStageError>> {
+    pub fn get_device_manager(&self) -> Result<Arc<DeviceManager>, VulkanInitStageError> {
         self.require_init_stage(VulkanInitStage::Device)?;
         Ok(self.device_manager.clone().unwrap())
     }

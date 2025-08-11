@@ -25,6 +25,8 @@ use super::{
 
 pub const REQUIRED_DEVICE_EXTENSIONS: [&CStr; 2] =
     [c"VK_KHR_swapchain", c"VK_KHR_vulkan_memory_model"];
+
+#[allow(dead_code)]
 struct Queues {
     graphics: Queue,
     present: Queue,
@@ -247,15 +249,18 @@ impl DeviceManager {
     pub fn create_pipeline_layout(
         &self,
         create_info: vk::PipelineLayoutCreateInfo,
-    ) -> Result<vk::PipelineLayout, Box<dyn Error>> {
+    ) -> Result<vk::PipelineLayout, VulkanInitStageError> {
         if self.device.is_none() {
             return Err(VulkanInitStageError::new(VulkanInitStage::Device));
         }
 
-        Ok(self
-            .device
-            .unwrap()
-            .create_pipeline_layout(create_info, None)?)
+        Ok(unsafe {
+            self.device
+                .as_ref()
+                .unwrap()
+                .create_pipeline_layout(&create_info, None)
+                .unwrap_or_else(|e| fatal_vk_error("failed to create pipeline layout", e))
+        })
     }
 }
 impl Drop for DeviceManager {

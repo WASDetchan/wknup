@@ -67,11 +67,10 @@ impl ShaderStageInfo {
             shader,
         }
     }
-    fn info(&self) -> vk::PipelineShaderStageCreateInfo<'_> {
-        let info = vk::PipelineShaderStageCreateInfo::default()
+    pub fn info(&self) -> vk::PipelineShaderStageCreateInfo<'_> {
+        vk::PipelineShaderStageCreateInfo::default()
             .module(self.shader.shader)
             .name(self.entry_point.as_c_str())
-            .stage(self.stage.clone().into());
-        info
+            .stage(self.stage.clone().into())
     }
 }

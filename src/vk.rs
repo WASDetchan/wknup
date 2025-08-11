@@ -17,29 +17,6 @@ pub mod pipeline;
 pub mod shader;
 mod surface;
 
-// #[derive(Debug, strum::Display, Clone)]
-// pub enum VulkanInitStage {
-//     Entry,
-//     Instance,
-//     Surface,
-//     Device,
-//     SwapchainManager,
-// }
-//
-// #[derive(Debug, thiserror::Error, Clone)]
-// #[error("{requiered_stage} must be initialized")]
-// pub struct VulkanInitStageError {
-//     pub requiered_stage: VulkanInitStage,
-// }
-//
-// impl VulkanInitStageError {
-//     fn new(stage: VulkanInitStage) -> Self {
-//         Self {
-//             requiered_stage: stage,
-//         }
-//     }
-// }
-
 pub struct VulkanBuilder<'a> {
     window: &'a WindowManager,
 }

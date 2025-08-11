@@ -9,7 +9,7 @@ use ash::vk::{
 
 use super::{
     device::{self, device_extensions, swapchain},
-    instance::Instance,
+    instance::{Instance, surface::SurfaceInstance},
 };
 
 type QFFilter = Arc<dyn Fn(PhysicalDevice, usize, &QueueFamilyProperties) -> bool + Send + Sync>;
@@ -28,13 +28,15 @@ fn filter_present_qf(
     id: usize,
     _props: &QueueFamilyProperties,
 ) -> bool {
+    let surface_instance = Arc::new(SurfaceInstance::new(instance.clone()));
     let support =
-        unsafe { instance.get_physical_device_surface_support(device, id as u32, surface) };
+        unsafe { surface_instance.get_physical_device_surface_support(device, id as u32, surface) };
     if !support.is_ok_and(|s| s) {
         return false;
     }
 
-    let surface_info = unsafe { query_device_surface_info(instance, device, surface).unwrap() };
+    let surface_info =
+        unsafe { query_device_surface_info(surface_instance, device, surface).unwrap() };
     if !swapchain::check_surface_info(surface_info) {
         return false;
     }
@@ -159,7 +161,7 @@ pub fn choose_physical_device(
 }
 
 pub unsafe fn query_device_surface_info(
-    instance: &Arc<Instance>,
+    instance: Arc<SurfaceInstance>,
     device: PhysicalDevice,
     surface: SurfaceKHR,
 ) -> Result<PhysicalDeviceSurfaceInfo, vk::Result> {

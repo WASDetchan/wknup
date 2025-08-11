@@ -15,7 +15,7 @@ use device_extensions::DeviceExtensionManager;
 use super::{
     VulkanInitStage, VulkanInitStageError,
     error::fatal_vk_error,
-    instance::Instance,
+    instance::{Instance, surface::SurfaceInstance},
     physical_device::{
         self, PhysicalDeviceSurfaceInfo, QueueFamilyIndices,
         features::{FeaturesInfo, PhysicalDeviceFeatures2},
@@ -150,9 +150,10 @@ impl DeviceManager {
         if self.physical_device.is_none() {
             return Err("cannot query surface info before physical_device is chosen".into());
         }
+        let surface_instance = Arc::new(SurfaceInstance::new(self.instance.clone()));
         Ok(unsafe {
             physical_device::query_device_surface_info(
-                &self.instance,
+                surface_instance,
                 self.physical_device.unwrap(),
                 self.surface.raw_handle(),
             )

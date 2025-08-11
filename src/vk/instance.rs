@@ -1,3 +1,72 @@
+pub mod surface {
+    use std::sync::Arc;
+
+    use ash::{
+        khr,
+        vk::{self, SurfaceKHR},
+    };
+
+    use crate::vk::physical_device::PhysicalDeviceSurfaceInfo;
+
+    use super::Instance;
+
+    pub struct SurfaceInstance {
+        _instance: Arc<Instance>, // Has to have a reference to the original Instance for ensuring
+        // correctness of lifetimes
+        surface_khr_instance: khr::surface::Instance,
+    }
+
+    impl SurfaceInstance {
+        pub fn new(instance: Arc<Instance>) -> Self {
+            let surface_khr_instance = unsafe { instance.make_surface_instance() };
+            Self {
+                _instance: instance,
+                surface_khr_instance,
+            }
+        }
+        pub unsafe fn get_physical_device_surface_support(
+            &self,
+            device: vk::PhysicalDevice,
+            id: u32,
+            surface: SurfaceKHR,
+        ) -> Result<bool, vk::Result> {
+            unsafe {
+                self.surface_khr_instance
+                    .get_physical_device_surface_support(device, id, surface)
+            }
+        }
+
+        pub unsafe fn get_physical_device_surface_info(
+            &self,
+            device: vk::PhysicalDevice,
+            surface: SurfaceKHR,
+        ) -> Result<PhysicalDeviceSurfaceInfo, vk::Result> {
+            unsafe {
+                let capabilities = self
+                    .surface_khr_instance
+                    .get_physical_device_surface_capabilities(device, surface)?;
+                let formats = self
+                    .surface_khr_instance
+                    .get_physical_device_surface_formats(device, surface)?;
+                let present_modes = self
+                    .surface_khr_instance
+                    .get_physical_device_surface_present_modes(device, surface)?;
+                Ok(PhysicalDeviceSurfaceInfo {
+                    capabilities,
+                    formats,
+                    present_modes,
+                })
+            }
+        }
+
+        pub unsafe fn destroy_surface(&self, surface: SurfaceKHR) {
+            unsafe {
+                self.surface_khr_instance.destroy_surface(surface, None);
+            }
+        }
+    }
+}
+
 use std::{
     error::Error,
     ffi::{CString, NulError},
@@ -16,10 +85,7 @@ use sdl3::video::Window;
 use super::{
     error::fatal_vk_error,
     extensions::{ExtensionManager, InstanceExtensionUnavailableError},
-    physical_device::{
-        PhysicalDeviceSurfaceInfo,
-        features::{FeaturesInfo, PhysicalDeviceFeatures2},
-    },
+    physical_device::features::{FeaturesInfo, PhysicalDeviceFeatures2},
     validation::{ValidationLayerManager, ValidationLayerUnavailableError},
 };
 use crate::vk::device::PhysicalDeviceInfo;
@@ -115,10 +181,9 @@ pub struct Instance {
 impl Instance {
     ///
     /// # Safety
-    /// Extension instance should not be used after Instance is dropped
+    /// khr::surface::Instance should not be used after parent instance is destroyed
     ///
-    pub unsafe fn make_surface_instance(&self) -> khr::surface::Instance {
-        // TODO: Separate khr::surface::Instance
+    unsafe fn make_surface_instance(&self) -> khr::surface::Instance {
         khr::surface::Instance::new(&self.entry, &self.instance)
     }
     pub fn create_surface(&self, window: &Window) -> Result<SurfaceKHR, sdl3::Error> {
@@ -150,16 +215,6 @@ impl Instance {
                 .get_physical_device_queue_family_properties(physical_device)
         }
     }
-    pub unsafe fn get_physical_device_surface_support(
-        // TODO: Separate khr::surface::Instance
-        &self,
-        device: PhysicalDevice,
-        id: u32,
-        surface: SurfaceKHR,
-    ) -> Result<bool, vk::Result> {
-        let s_instance = khr::surface::Instance::new(&self.entry, &self.instance);
-        unsafe { s_instance.get_physical_device_surface_support(device, id, surface) }
-    }
 
     pub unsafe fn create_device(
         &self,
@@ -176,26 +231,6 @@ impl Instance {
         device: PhysicalDevice,
     ) -> Result<Vec<ExtensionProperties>, vk::Result> {
         unsafe { self.instance.enumerate_device_extension_properties(device) }
-    }
-    pub unsafe fn get_physical_device_surface_info(
-        // TODO: Separate khr::surface::Instance
-        &self,
-        device: PhysicalDevice,
-        surface: SurfaceKHR,
-    ) -> Result<PhysicalDeviceSurfaceInfo, vk::Result> {
-        unsafe {
-            let s_instance = khr::surface::Instance::new(&self.entry, &self.instance);
-            let capabilities =
-                s_instance.get_physical_device_surface_capabilities(device, surface)?;
-            let formats = s_instance.get_physical_device_surface_formats(device, surface)?;
-            let present_modes =
-                s_instance.get_physical_device_surface_present_modes(device, surface)?;
-            Ok(PhysicalDeviceSurfaceInfo {
-                capabilities,
-                formats,
-                present_modes,
-            })
-        }
     }
 
     ///

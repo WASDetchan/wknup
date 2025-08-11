@@ -1,24 +1,22 @@
 use std::sync::Arc;
 
-use ash::{khr, vk::SurfaceKHR};
+use ash::vk::SurfaceKHR;
 
 use crate::window::WindowManager;
 
-use super::instance::Instance;
+use super::instance::{Instance, surface::SurfaceInstance};
 
 pub struct SurfaceManager {
-    _instance: Arc<Instance>,
-    surface_instance: khr::surface::Instance,
+    instance: SurfaceInstance,
     surface: SurfaceKHR,
 }
 
 impl SurfaceManager {
     pub fn init(instance: Arc<Instance>, window: &WindowManager) -> Result<Self, sdl3::Error> {
         let surface = window.create_surface(&instance)?;
-        let surface_instance = unsafe { instance.make_surface_instance() };
+        let surface_instance = SurfaceInstance::new(instance);
         Ok(Self {
-            _instance: instance,
-            surface_instance,
+            instance: surface_instance,
             surface,
         })
     }
@@ -35,7 +33,7 @@ impl SurfaceManager {
 impl Drop for SurfaceManager {
     fn drop(&mut self) {
         unsafe {
-            self.surface_instance.destroy_surface(self.surface, None);
+            self.instance.destroy_surface(self.surface);
         }
     }
 }

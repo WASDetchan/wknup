@@ -1,0 +1,56 @@
+use std::sync::Arc;
+
+use crate::vk::device::{Device, swapchain::Swapchain};
+use ash::vk;
+
+pub struct RenderPass {
+    device: Arc<Device>,
+    swapchain: Arc<Swapchain>,
+    render_pass: vk::RenderPass,
+}
+
+impl RenderPass {
+    pub fn new(device: Arc<Device>, swapchain: Arc<Swapchain>) -> Result<Self, vk::Result> {
+        let attachment_description = [vk::AttachmentDescription::default()
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .format(swapchain.get_format().format)
+            .load_op(vk::AttachmentLoadOp::CLEAR)
+            .store_op(vk::AttachmentStoreOp::STORE)
+            .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
+            .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
+            .initial_layout(vk::ImageLayout::UNDEFINED)
+            .final_layout(vk::ImageLayout::PRESENT_SRC_KHR)];
+
+        let attachment_reference = [vk::AttachmentReference::default()
+            .attachment(0)
+            .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)];
+
+        let subpass_description = [vk::SubpassDescription::default()
+            .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
+            .color_attachments(&attachment_reference)];
+
+        let render_pass_info = vk::RenderPassCreateInfo::default()
+            .attachments(&attachment_description)
+            .subpasses(&subpass_description);
+
+        let render_pass = unsafe { device.create_render_pass(&render_pass_info)? };
+
+        Ok(Self {
+            device,
+            swapchain,
+            render_pass,
+        })
+    }
+
+    pub unsafe fn raw_handle(&self) -> vk::RenderPass {
+        self.render_pass
+    }
+}
+
+impl Drop for RenderPass {
+    fn drop(&mut self) {
+        unsafe {
+            self.device.destroy_render_pass(self.render_pass);
+        }
+    }
+}

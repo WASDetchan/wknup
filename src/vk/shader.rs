@@ -4,10 +4,9 @@ use ash::vk;
 
 use super::device::Device;
 
-#[derive(Clone)]
 pub struct ShaderModule {
     device: Arc<Device>,
-    pub shader: vk::ShaderModule,
+    shader: vk::ShaderModule,
 }
 
 impl ShaderModule {
@@ -27,7 +26,7 @@ impl Drop for ShaderModule {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub enum ShaderStage {
     Vertex,
     TessellationControl,
@@ -56,13 +55,13 @@ impl From<ShaderStage> for vk::ShaderStageFlags {
 
 #[derive(Clone)]
 pub struct ShaderStageInfo {
-    pub shader: ShaderModule,
-    pub stage: ShaderStage,
-    pub entry_point: CString,
+    shader: Arc<ShaderModule>,
+    stage: ShaderStage,
+    entry_point: CString,
 }
 
 impl ShaderStageInfo {
-    pub fn new(shader: ShaderModule, stage: ShaderStage, entry_point: String) -> Self {
+    pub fn new(shader: Arc<ShaderModule>, stage: ShaderStage, entry_point: String) -> Self {
         Self {
             stage,
             entry_point: CString::new(entry_point).expect("invalid entry_point"),
@@ -73,6 +72,6 @@ impl ShaderStageInfo {
         vk::PipelineShaderStageCreateInfo::default()
             .module(self.shader.shader)
             .name(self.entry_point.as_c_str())
-            .stage(self.stage.clone().into())
+            .stage(self.stage.into())
     }
 }

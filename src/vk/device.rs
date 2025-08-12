@@ -12,6 +12,7 @@ use device_extensions::DeviceExtensionManager;
 
 use super::{
     error::fatal_vk_error,
+    framebuffer,
     instance::{Instance, surface::SurfaceInstance},
     physical_device::{
         self, PhysicalDeviceChoice, PhysicalDeviceSurfaceInfo, QueueFamilyIndices,
@@ -190,7 +191,7 @@ impl Device {
         }
     }
 
-    pub fn create_pipeline_layout(
+    pub unsafe fn create_pipeline_layout(
         &self,
         create_info: vk::PipelineLayoutCreateInfo,
     ) -> vk::PipelineLayout {
@@ -201,7 +202,7 @@ impl Device {
         }
     }
 
-    pub fn destroy_pipeline_layout(&self, layout: vk::PipelineLayout) {
+    pub unsafe fn destroy_pipeline_layout(&self, layout: vk::PipelineLayout) {
         unsafe { self.device.destroy_pipeline_layout(layout, None) };
     }
     pub unsafe fn create_render_pass(
@@ -234,6 +235,22 @@ impl Device {
     pub unsafe fn destroy_pipeline(&self, pipeline: vk::Pipeline) {
         unsafe {
             self.device.destroy_pipeline(pipeline, None);
+        }
+    }
+
+    pub unsafe fn create_framebuffer(
+        &self,
+        create_info: &vk::FramebufferCreateInfo,
+    ) -> vk::Framebuffer {
+        unsafe {
+            self.device
+                .create_framebuffer(create_info, None)
+                .unwrap_or_else(|e| fatal_vk_error("failed to create framebuffer", e))
+        }
+    }
+    pub unsafe fn destroy_framebuffer(&self, framebuffer: vk::Framebuffer) {
+        unsafe {
+            self.device.destroy_framebuffer(framebuffer, None);
         }
     }
 }

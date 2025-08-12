@@ -1,13 +1,18 @@
-mod layout;
-mod render_pass;
+pub mod layout;
+pub mod render_pass;
 use ash::vk::{self};
 use layout::PipelineLayout;
 use render_pass::RenderPass;
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, error::Error, sync::Arc};
 
 use crate::vk::device::swapchain::Swapchain;
 
-use super::{Vulkan, device::Device, shader::ShaderStageInfo};
+use super::{
+    Vulkan,
+    device::Device,
+    framebuffer::Framebuffer,
+    shader::{MissingShaderStageError, ShaderStage, ShaderStageInfo},
+};
 
 pub struct FixedFuctionState {
     dynamic_states: Vec<vk::DynamicState>,
@@ -35,32 +40,32 @@ impl FixedFuctionState {
         }
     }
 
-    pub fn get_dynamic_state(&self) -> vk::PipelineDynamicStateCreateInfo {
+    pub fn get_dynamic_state(&self) -> vk::PipelineDynamicStateCreateInfo<'_> {
         vk::PipelineDynamicStateCreateInfo::default().dynamic_states(&self.dynamic_states)
     }
-    pub fn get_vertex_input_state(&self) -> vk::PipelineVertexInputStateCreateInfo {
+    pub fn get_vertex_input_state(&self) -> vk::PipelineVertexInputStateCreateInfo<'_> {
         vk::PipelineVertexInputStateCreateInfo::default()
     }
-    pub fn get_input_assembly_state(&self) -> vk::PipelineInputAssemblyStateCreateInfo {
+    pub fn get_input_assembly_state(&self) -> vk::PipelineInputAssemblyStateCreateInfo<'_> {
         vk::PipelineInputAssemblyStateCreateInfo::default()
             .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
     }
-    pub fn get_viewport_state(&self) -> vk::PipelineViewportStateCreateInfo {
+    pub fn get_viewport_state(&self) -> vk::PipelineViewportStateCreateInfo<'_> {
         vk::PipelineViewportStateCreateInfo::default()
             .viewport_count(1)
             .scissor_count(1)
     }
-    pub fn get_rasterization_state(&self) -> vk::PipelineRasterizationStateCreateInfo {
+    pub fn get_rasterization_state(&self) -> vk::PipelineRasterizationStateCreateInfo<'_> {
         vk::PipelineRasterizationStateCreateInfo::default()
             .polygon_mode(vk::PolygonMode::FILL)
             .line_width(1.0f32)
     }
-    pub fn get_multisample_state(&self) -> vk::PipelineMultisampleStateCreateInfo {
+    pub fn get_multisample_state(&self) -> vk::PipelineMultisampleStateCreateInfo<'_> {
         vk::PipelineMultisampleStateCreateInfo::default()
             .rasterization_samples(vk::SampleCountFlags::TYPE_1)
     }
 
-    pub fn get_color_blend_state(&self) -> vk::PipelineColorBlendStateCreateInfo {
+    pub fn get_color_blend_state(&self) -> vk::PipelineColorBlendStateCreateInfo<'_> {
         vk::PipelineColorBlendStateCreateInfo::default()
             .attachments(&self.color_blend_attachment_states)
     }
@@ -85,7 +90,20 @@ impl GraphicsPipelineBuilder {
         self.shader_stages.insert(name, stage);
         self
     }
-    pub fn build(self) -> Result<GraphicsPipeline, Box<dyn std::error::Error>> {
+    fn require_stage(&self, stage: ShaderStage) -> Result<(), MissingShaderStageError> {
+        if !self
+            .shader_stages
+            .iter()
+            .any(|(_, info)| info.stage() == stage)
+        {
+            Err(MissingShaderStageError::new(stage))
+        } else {
+            Ok(())
+        }
+    }
+    pub fn build(self) -> Result<GraphicsPipeline, Box<dyn Error>> {
+        self.require_stage(ShaderStage::Vertex)?;
+        self.require_stage(ShaderStage::Fragment)?;
         let fixed_function_state = FixedFuctionState::new();
         let (
             vertex_input_state,
@@ -105,15 +123,14 @@ impl GraphicsPipelineBuilder {
             fixed_function_state.get_dynamic_state(),
         );
 
-        let render_pass = RenderPass::new(Arc::clone(&self.device), Arc::clone(&self.swapchain))?;
+        let render_pass = Arc::new(RenderPass::new(
+            Arc::clone(&self.device),
+            Arc::clone(&self.swapchain),
+        )?);
 
         let layout = PipelineLayout::new(Arc::clone(&self.device));
 
-        let stages: Vec<_> = self
-            .shader_stages
-            .iter()
-            .map(|(key, val)| val.info())
-            .collect();
+        let stages: Vec<_> = self.shader_stages.values().map(|val| val.info()).collect();
 
         let pipeline_create_info = vk::GraphicsPipelineCreateInfo::default()
             .stages(&stages)
@@ -128,6 +145,8 @@ impl GraphicsPipelineBuilder {
             .render_pass(unsafe { render_pass.raw_handle() })
             .subpass(0);
 
+        let framebuffers = self.swapchain.create_framebuffers(render_pass.clone());
+
         let pipeline = unsafe { self.device.create_graphics_pipeline(pipeline_create_info)? };
 
         Ok(GraphicsPipeline {
@@ -137,6 +156,7 @@ impl GraphicsPipelineBuilder {
             layout,
             render_pass,
             pipeline,
+            framebuffers,
         })
     }
 }
@@ -147,11 +167,18 @@ pub struct GraphicsPipeline {
     swapchain: Arc<Swapchain>,
     shader_stages: HashMap<String, ShaderStageInfo>,
     layout: PipelineLayout,
-    render_pass: RenderPass,
+    render_pass: Arc<RenderPass>,
     pipeline: vk::Pipeline,
+    framebuffers: Vec<Framebuffer>,
 }
 
-impl GraphicsPipeline {}
+impl GraphicsPipeline {
+    pub fn create_framebuffers(&mut self) {
+        self.framebuffers = self
+            .swapchain
+            .create_framebuffers(Arc::clone(&self.render_pass));
+    }
+}
 
 impl Drop for GraphicsPipeline {
     fn drop(&mut self) {

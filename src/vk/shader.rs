@@ -4,6 +4,17 @@ use ash::vk;
 
 use super::device::Device;
 
+#[derive(Debug, thiserror::Error)]
+#[error("Shader stage {stage} is required but missing")]
+pub struct MissingShaderStageError {
+    stage: ShaderStage,
+}
+impl MissingShaderStageError {
+    pub fn new(stage: ShaderStage) -> Self {
+        Self { stage }
+    }
+}
+
 pub struct ShaderModule {
     device: Arc<Device>,
     shader: vk::ShaderModule,
@@ -26,7 +37,7 @@ impl Drop for ShaderModule {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, strum::Display, Debug, PartialEq, Eq)]
 pub enum ShaderStage {
     Vertex,
     TessellationControl,
@@ -67,6 +78,9 @@ impl ShaderStageInfo {
             entry_point: CString::new(entry_point).expect("invalid entry_point"),
             shader,
         }
+    }
+    pub fn stage(&self) -> ShaderStage {
+        self.stage
     }
     pub fn info(&self) -> vk::PipelineShaderStageCreateInfo<'_> {
         vk::PipelineShaderStageCreateInfo::default()

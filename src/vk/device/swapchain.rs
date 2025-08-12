@@ -6,7 +6,10 @@ use ash::vk::{
     SurfaceFormatKHR, SurfaceTransformFlagsKHR, SwapchainCreateInfoKHR, SwapchainKHR,
 };
 
-use crate::vk::{physical_device::PhysicalDeviceSurfaceInfo, surface::SurfaceManager};
+use crate::vk::{
+    framebuffer::Framebuffer, physical_device::PhysicalDeviceSurfaceInfo,
+    pipeline::render_pass::RenderPass, surface::SurfaceManager,
+};
 
 use super::Device;
 use thiserror;
@@ -79,6 +82,26 @@ impl Swapchain {
     }
     pub fn get_format(&self) -> SurfaceFormatKHR {
         self.format
+    }
+    pub fn create_framebuffers(&self, render_pass: Arc<RenderPass>) -> Vec<Framebuffer> {
+        self.views
+            .iter()
+            .map(|view| {
+                let attachments = [view.clone()];
+                let create_info = vk::FramebufferCreateInfo::default()
+                    .render_pass(unsafe { render_pass.raw_handle() })
+                    .attachments(&attachments)
+                    .height(self.extent.height)
+                    .width(self.extent.width)
+                    .layers(1);
+                let framebuffer = unsafe { self.device.create_framebuffer(&create_info) };
+                Framebuffer::new(
+                    Arc::clone(&self.device),
+                    Arc::clone(&render_pass),
+                    framebuffer,
+                )
+            })
+            .collect()
     }
 }
 impl Drop for Swapchain {

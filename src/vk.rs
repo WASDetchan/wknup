@@ -10,6 +10,7 @@ use surface::SurfaceManager;
 use crate::window::WindowManager;
 
 pub mod error;
+mod framebuffer;
 pub mod instance;
 mod physical_device;
 pub mod pipeline;

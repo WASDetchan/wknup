@@ -5,7 +5,7 @@ use ash::vk;
 
 pub struct RenderPass {
     device: Arc<Device>,
-    swapchain: Arc<Swapchain>,
+    _swapchain: Arc<Swapchain>,
     render_pass: vk::RenderPass,
 }
 
@@ -37,7 +37,7 @@ impl RenderPass {
 
         Ok(Self {
             device,
-            swapchain,
+            _swapchain: swapchain,
             render_pass,
         })
     }

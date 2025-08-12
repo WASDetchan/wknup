@@ -1,6 +1,6 @@
 mod layout;
 mod render_pass;
-use ash::vk::{self, PrimitiveTopology};
+use ash::vk::{self};
 use layout::PipelineLayout;
 use render_pass::RenderPass;
 use std::{collections::HashMap, sync::Arc};
@@ -12,6 +12,12 @@ use super::{Vulkan, device::Device, shader::ShaderStageInfo};
 pub struct FixedFuctionState {
     dynamic_states: Vec<vk::DynamicState>,
     color_blend_attachment_states: Vec<vk::PipelineColorBlendAttachmentState>,
+}
+
+impl Default for FixedFuctionState {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl FixedFuctionState {

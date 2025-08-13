@@ -42,7 +42,7 @@ impl RenderPass {
         })
     }
 
-    pub unsafe fn raw_handle(&self) -> vk::RenderPass {
+    pub(in crate::vk) unsafe fn raw_handle(&self) -> vk::RenderPass {
         self.render_pass
     }
 }

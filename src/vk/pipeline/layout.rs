@@ -17,7 +17,7 @@ impl PipelineLayout {
         Self { device, layout }
     }
 
-    pub unsafe fn raw_handle(&self) -> vk::PipelineLayout {
+    pub(in crate::vk) unsafe fn raw_handle(&self) -> vk::PipelineLayout {
         self.layout
     }
 }

@@ -7,8 +7,8 @@ use ash::vk::{
 };
 
 use crate::vk::{
-    framebuffer::Framebuffer, physical_device::PhysicalDeviceSurfaceInfo,
-    pipeline::render_pass::RenderPass, surface::SurfaceManager,
+    framebuffer::Framebuffer, pipeline::render_pass::RenderPass,
+    surface::PhysicalDeviceSurfaceInfo, surface::SurfaceManager,
 };
 
 use super::Device;
@@ -127,10 +127,10 @@ impl SwapchainManager {
     }
     pub fn create_swapchain(&self) -> Result<Swapchain, Box<dyn Error>> {
         let surface_info = self.device.get_surface_info()?;
-        let queue_family_indices = self.device.get_queue_family_indices();
+        let queue_family_chooser = self.device.get_queue_family_chooser();
 
-        let graphic = queue_family_indices.graphics.unwrap();
-        let present = queue_family_indices.present.unwrap();
+        let graphic = queue_family_chooser.graphics.unwrap();
+        let present = queue_family_chooser.present.unwrap();
         let indices = [graphic as u32, present as u32];
 
         let capabilities = surface_info.capabilities;

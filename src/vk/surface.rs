@@ -1,11 +1,16 @@
 use std::sync::Arc;
 
-use ash::vk::SurfaceKHR;
+use ash::vk::{self, PhysicalDevice, SurfaceKHR};
 
 use crate::window::WindowManager;
 
 use super::instance::{Instance, surface::SurfaceInstance};
 
+pub struct PhysicalDeviceSurfaceInfo {
+    pub capabilities: vk::SurfaceCapabilitiesKHR,
+    pub formats: Vec<vk::SurfaceFormatKHR>,
+    pub present_modes: Vec<vk::PresentModeKHR>,
+}
 pub struct SurfaceManager {
     instance: SurfaceInstance,
     surface: SurfaceKHR,
@@ -21,11 +26,31 @@ impl SurfaceManager {
         })
     }
 
+    pub fn get_physical_device_surface_support(
+        &self,
+        device: PhysicalDevice,
+        id: u32,
+    ) -> Result<bool, vk::Result> {
+        unsafe {
+            self.instance
+                .get_physical_device_surface_support(device, id, self.surface)
+        }
+    }
+    pub fn get_physical_device_surface_info(
+        &self,
+        device: PhysicalDevice,
+    ) -> Result<PhysicalDeviceSurfaceInfo, vk::Result> {
+        unsafe {
+            self.instance
+                .get_physical_device_surface_info(device, self.surface)
+        }
+    }
+
     ///
     /// # Safety
     /// SurfaceKHR should not be destroyed via raw handle
     ///
-    pub unsafe fn raw_handle(&self) -> SurfaceKHR {
+    pub(in crate::vk) unsafe fn raw_handle(&self) -> SurfaceKHR {
         self.surface
     }
 }

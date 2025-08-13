@@ -1,4 +1,5 @@
 pub mod device_extensions;
+pub mod queues;
 pub mod swapchain;
 
 use std::{error::Error, ffi::CStr, sync::Arc};
@@ -12,17 +13,16 @@ use device_extensions::DeviceExtensionManager;
 
 use super::{
     error::fatal_vk_error,
-    framebuffer,
-    instance::{Instance, surface::SurfaceInstance},
+    instance::Instance,
     physical_device::{
-        self, PhysicalDeviceChoice, PhysicalDeviceSurfaceInfo, QueueFamilyIndices,
+        self, Chooser, PhysicalDeviceChoice,
         features::{FeaturesInfo, PhysicalDeviceFeatures2},
     },
-    surface::SurfaceManager,
+    surface::{PhysicalDeviceSurfaceInfo, SurfaceManager},
 };
 
 pub struct DeviceBuilder {
-    queue_family_indices: QueueFamilyIndices,
+    queue_family_chooser: Chooser,
     instance: Arc<Instance>,
     surface: Arc<SurfaceManager>,
 }
@@ -30,9 +30,7 @@ pub struct DeviceBuilder {
 impl DeviceBuilder {
     pub fn new(instance: Arc<Instance>, surface: Arc<SurfaceManager>) -> Self {
         Self {
-            queue_family_indices: QueueFamilyIndices::default(instance.clone(), unsafe {
-                surface.raw_handle()
-            }),
+            queue_family_chooser: Chooser::new(instance.clone(), surface.clone()),
             instance,
             surface,
         }
@@ -40,21 +38,22 @@ impl DeviceBuilder {
 
     pub fn build(self) -> Result<Device, Box<dyn Error>> {
         let PhysicalDeviceChoice {
-            queue_family_indices,
+            queue_family_chooser,
             device: physical_device,
+            ..
         } = physical_device::choose_physical_device(
             &self.instance,
-            self.queue_family_indices.clone(),
+            self.queue_family_chooser.clone(),
         )?;
 
         let graphic_present_match =
-            queue_family_indices.graphics.unwrap() == queue_family_indices.present.unwrap();
+            queue_family_chooser.graphics.unwrap() == queue_family_chooser.present.unwrap();
 
         let graphic_info = DeviceQueueCreateInfo::default()
-            .queue_family_index(queue_family_indices.graphics.unwrap() as u32)
+            .queue_family_index(queue_family_chooser.graphics.unwrap() as u32)
             .queue_priorities(&[0.0f32]);
         let present_info = DeviceQueueCreateInfo::default()
-            .queue_family_index(queue_family_indices.present.unwrap() as u32)
+            .queue_family_index(queue_family_chooser.present.unwrap() as u32)
             .queue_priorities(&[0.0f32]);
 
         let queue_infos = if graphic_present_match {
@@ -82,9 +81,9 @@ impl DeviceBuilder {
         let device = unsafe { self.instance.create_device(physical_device, &device_info) }?;
 
         let graphic_queue =
-            unsafe { device.get_device_queue(queue_family_indices.graphics.unwrap() as u32, 0) };
+            unsafe { device.get_device_queue(queue_family_chooser.graphics.unwrap() as u32, 0) };
         let present_queue =
-            unsafe { device.get_device_queue(queue_family_indices.present.unwrap() as u32, 0) };
+            unsafe { device.get_device_queue(queue_family_chooser.present.unwrap() as u32, 0) };
 
         let queues = Queues {
             graphics: graphic_queue,
@@ -95,7 +94,7 @@ impl DeviceBuilder {
             instance: self.instance,
             surface: self.surface,
             physical_device,
-            queue_family_indices,
+            queue_family_chooser,
             device,
             queues,
         })
@@ -120,7 +119,7 @@ pub struct Device {
     instance: Arc<Instance>,
     surface: Arc<SurfaceManager>,
     physical_device: PhysicalDevice,
-    queue_family_indices: QueueFamilyIndices,
+    queue_family_chooser: Chooser,
     device: ash::Device,
     queues: Queues,
 }
@@ -133,18 +132,12 @@ impl Device {
     }
 
     pub fn get_surface_info(&self) -> Result<PhysicalDeviceSurfaceInfo, vk::Result> {
-        let surface_instance = Arc::new(SurfaceInstance::new(self.instance.clone()));
-        unsafe {
-            physical_device::query_device_surface_info(
-                surface_instance,
-                self.physical_device,
-                self.surface.raw_handle(),
-            )
-        }
+        self.surface
+            .get_physical_device_surface_info(self.physical_device)
     }
 
-    pub fn get_queue_family_indices(&self) -> QueueFamilyIndices {
-        self.queue_family_indices.clone()
+    pub fn get_queue_family_chooser(&self) -> Chooser {
+        self.queue_family_chooser.clone()
     }
 
     pub unsafe fn destroy_swapchain(&self, swapchain: SwapchainKHR) -> Result<(), Box<dyn Error>> {

@@ -6,7 +6,7 @@ pub mod surface {
         vk::{self, SurfaceKHR},
     };
 
-    use crate::vk::physical_device::PhysicalDeviceSurfaceInfo;
+    use crate::vk::surface::PhysicalDeviceSurfaceInfo;
 
     use super::Instance;
 

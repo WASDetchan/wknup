@@ -58,15 +58,14 @@ fn choose_transform(capabilities: SurfaceCapabilitiesKHR) -> SurfaceTransformFla
     capabilities.current_transform
 }
 
-#[allow(dead_code)]
 pub struct Swapchain {
     device: Arc<Device>,
-    surface: Arc<SurfaceManager>,
+    _surface: Arc<SurfaceManager>,
     swapchain_khr: SwapchainKHR,
     extent: Extent2D,
     format: SurfaceFormatKHR,
-    present_mode: PresentModeKHR,
-    images: Vec<vk::Image>,
+    _present_mode: PresentModeKHR,
+    _images: Vec<vk::Image>,
     views: Vec<vk::ImageView>,
 }
 
@@ -127,7 +126,10 @@ impl SwapchainManager {
     }
     pub fn create_swapchain(&self) -> Result<Swapchain, Box<dyn Error>> {
         let surface_info = self.device.get_surface_info()?;
-        let queue_family_chooser = self.device.get_queue_family_chooser();
+        let queue_family_chooser = self
+            .device
+            .get_physical_device_choice()
+            .queue_family_chooser;
 
         let graphic = queue_family_chooser.graphics.unwrap();
         let present = queue_family_chooser.present.unwrap();
@@ -181,13 +183,13 @@ impl SwapchainManager {
             .collect();
 
         Ok(Swapchain {
-            surface: Arc::clone(&self.surface),
+            _surface: Arc::clone(&self.surface),
             device: Arc::clone(&self.device),
             swapchain_khr,
-            images,
+            _images: images,
             views,
             format,
-            present_mode,
+            _present_mode: present_mode,
             extent,
         })
     }

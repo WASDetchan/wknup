@@ -5,8 +5,8 @@ pub mod swapchain;
 use std::{error::Error, ffi::CStr, sync::Arc};
 
 use ash::vk::{
-    self, DeviceCreateInfo, DeviceQueueCreateInfo, ImageView, PhysicalDevice,
-    PhysicalDeviceProperties, PipelineCache, ShaderModule, SwapchainCreateInfoKHR, SwapchainKHR,
+    self, DeviceCreateInfo, DeviceQueueCreateInfo, ImageView, PhysicalDeviceProperties,
+    PipelineCache, ShaderModule, SwapchainCreateInfoKHR, SwapchainKHR,
 };
 use device_extensions::DeviceExtensionManager;
 use queues::QueueFamilyChooser;
@@ -37,16 +37,36 @@ impl DeviceBuilder {
     }
 
     pub fn build(self) -> Result<Device, Box<dyn Error>> {
-        let PhysicalDeviceChoice {
-            queue_family_chooser,
-            device: physical_device,
-            ..
-        } = physical_device::choose_physical_device(
+        let physical_device_choice = physical_device::choose_physical_device(
             &self.instance,
             self.queue_family_chooser.clone(),
         )?;
 
+        let physical_device = physical_device_choice.device;
+        let queue_family_chooser = physical_device_choice.queue_family_chooser.clone();
+
         let requirements = queue_family_chooser.requirements();
+
+        if physical_device_choice
+            .queue_counts
+            .iter()
+            .enumerate()
+            .map(|(qid, count)| {
+                requirements
+                    .iter()
+                    .filter(|(id, _)| *id as usize == qid)
+                    .count()
+                    <= 1
+                    && requirements
+                        .iter()
+                        .map(|(id, v)| (*id, v.len()))
+                        .find(|(id, len)| *id as usize == qid && *len > *count as usize)
+                        .is_none()
+            })
+            .any(|b| !b)
+        {
+            panic!("queue selector returned invalid requirements!");
+        }
 
         let queue_infos: Vec<_> = requirements
             .iter()
@@ -99,8 +119,7 @@ impl DeviceBuilder {
         Ok(Device {
             instance: self.instance,
             surface: self.surface,
-            physical_device,
-            queue_family_chooser,
+            physical_device_choice,
             device,
             queues,
         })
@@ -118,8 +137,7 @@ pub struct PhysicalDeviceInfo {
 pub struct Device {
     instance: Arc<Instance>,
     surface: Arc<SurfaceManager>,
-    physical_device: PhysicalDevice,
-    queue_family_chooser: Chooser,
+    physical_device_choice: PhysicalDeviceChoice<Chooser>,
     device: ash::Device,
     queues: DrawQueues,
 }
@@ -133,11 +151,11 @@ impl Device {
 
     pub fn get_surface_info(&self) -> Result<PhysicalDeviceSurfaceInfo, vk::Result> {
         self.surface
-            .get_physical_device_surface_info(self.physical_device)
+            .get_physical_device_surface_info(self.physical_device_choice.device)
     }
 
-    pub fn get_queue_family_chooser(&self) -> Chooser {
-        self.queue_family_chooser.clone()
+    pub fn get_physical_device_choice(&self) -> PhysicalDeviceChoice<Chooser> {
+        self.physical_device_choice.clone()
     }
 
     pub unsafe fn destroy_swapchain(&self, swapchain: SwapchainKHR) -> Result<(), Box<dyn Error>> {
@@ -245,6 +263,10 @@ impl Device {
         unsafe {
             self.device.destroy_framebuffer(framebuffer, None);
         }
+    }
+
+    pub(in crate::vk) unsafe fn raw_handle(&self) -> ash::Device {
+        self.device.clone()
     }
 }
 impl Drop for Device {

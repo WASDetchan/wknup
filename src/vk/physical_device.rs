@@ -126,12 +126,14 @@ fn rate_physical_device<T: QueueFamilyChooser>(
     let info = unsafe { instance.get_physical_device_info(device) };
     let props = info.properties;
     let features = info.features;
+    let mut queue_counts = Vec::new();
 
     if !(props.device_type == PhysicalDeviceType::DISCRETE_GPU
         || props.device_type == PhysicalDeviceType::INTEGRATED_GPU)
     {
         return PhysicalDeviceChoice {
             rating: 0,
+            queue_counts,
             device,
             queue_family_chooser: qfc,
         };
@@ -142,6 +144,7 @@ fn rate_physical_device<T: QueueFamilyChooser>(
     {
         return PhysicalDeviceChoice {
             rating: 0,
+            queue_counts,
             device,
             queue_family_chooser: qfc,
         };
@@ -150,6 +153,7 @@ fn rate_physical_device<T: QueueFamilyChooser>(
     if features.check_required().is_err() {
         return PhysicalDeviceChoice {
             rating: 0,
+            queue_counts,
             device,
             queue_family_chooser: qfc,
         };
@@ -158,11 +162,15 @@ fn rate_physical_device<T: QueueFamilyChooser>(
     unsafe { instance.get_physical_device_queue_family_properties(device) }
         .into_iter()
         .enumerate()
-        .for_each(|(id, prop)| qfc.inspect_queue_family(device, id.try_into().unwrap(), prop));
+        .for_each(|(id, prop)| {
+            queue_counts.push(prop.queue_count);
+            qfc.inspect_queue_family(device, id.try_into().unwrap(), prop)
+        });
 
     if !qfc.is_complete() {
         return PhysicalDeviceChoice {
             rating: 0,
+            queue_counts,
             device,
             queue_family_chooser: qfc,
         };
@@ -170,6 +178,7 @@ fn rate_physical_device<T: QueueFamilyChooser>(
 
     return PhysicalDeviceChoice {
         rating: 1,
+        queue_counts,
         device,
         queue_family_chooser: qfc,
     };
@@ -183,10 +192,12 @@ pub enum PhysicalDeviceChoiceError {
     SuitableDeviceNotFound,
 }
 
+#[derive(Clone)]
 pub struct PhysicalDeviceChoice<T: QueueFamilyChooser> {
     rating: i32,
     pub device: PhysicalDevice,
     pub queue_family_chooser: T,
+    pub queue_counts: Vec<u32>,
 }
 pub fn choose_physical_device<T: QueueFamilyChooser>(
     instance: &Arc<Instance>,

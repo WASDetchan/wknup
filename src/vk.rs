@@ -1,3 +1,13 @@
+pub mod command_buffer;
+pub mod command_pool;
+pub mod error;
+mod framebuffer;
+pub mod instance;
+mod physical_device;
+pub mod pipeline;
+pub mod shader;
+mod surface;
+
 use ash::{
     Entry,
     vk::{self},
@@ -8,14 +18,6 @@ use std::{error::Error, sync::Arc};
 use surface::SurfaceManager;
 
 use crate::window::WindowManager;
-
-pub mod error;
-mod framebuffer;
-pub mod instance;
-mod physical_device;
-pub mod pipeline;
-pub mod shader;
-mod surface;
 
 pub struct VulkanBuilder<'a> {
     window: &'a WindowManager,

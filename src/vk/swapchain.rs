@@ -7,11 +7,10 @@ use ash::vk::{
 };
 
 use crate::vk::{
-    framebuffer::Framebuffer, pipeline::render_pass::RenderPass,
+    device::Device, framebuffer::Framebuffer, pipeline::render_pass::RenderPass,
     surface::PhysicalDeviceSurfaceInfo, surface::SurfaceManager,
 };
 
-use super::Device;
 use thiserror;
 
 #[derive(Debug, thiserror::Error)]

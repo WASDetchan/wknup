@@ -1,20 +1,21 @@
 mod fixed_function_state;
 pub mod layout;
 pub mod render_pass;
-use ash::vk::{self};
+use ash::vk;
 use layout::PipelineLayout;
 use render_pass::RenderPass;
 use std::{collections::HashMap, error::Error, sync::Arc};
 
-use crate::vk::device::swapchain::Swapchain;
 use fixed_function_state::FixedFuctionState;
 
-use super::{
-    Vulkan,
+use crate::vk::{
     device::Device,
     framebuffer::Framebuffer,
     shader::{MissingShaderStageError, ShaderStage, ShaderStageInfo},
+    swapchain::Swapchain,
 };
+
+use super::device;
 
 pub struct GraphicsPipelineBuilder {
     device: Arc<Device>,
@@ -23,8 +24,7 @@ pub struct GraphicsPipelineBuilder {
 }
 
 impl GraphicsPipelineBuilder {
-    pub fn new(vulkan: Arc<Vulkan>, swapchain: Arc<Swapchain>) -> Self {
-        let device = vulkan.get_device();
+    pub fn new(device: Arc<Device>, swapchain: Arc<Swapchain>) -> Self {
         Self {
             device,
             swapchain,

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::vk::device::{Device, swapchain::Swapchain};
+use crate::vk::{device::Device, swapchain::Swapchain};
 use ash::vk;
 
 pub struct RenderPass {

@@ -4,15 +4,15 @@ use std::sync::Arc;
 
 use ash::vk::{self, PhysicalDevice, PhysicalDeviceType, QueueFamilyProperties, QueueFlags};
 
-use super::{
+use crate::vk::{
     device::{
         self, device_extensions,
         queues::{QueueFamilyChooser, Queues},
-        swapchain,
     },
     error::fatal_vk_error,
     instance::Instance,
     surface::SurfaceManager,
+    swapchain,
 };
 
 pub struct DrawQueues {

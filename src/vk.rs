@@ -7,6 +7,7 @@ mod framebuffer;
 pub mod instance;
 mod physical_device;
 pub mod pipeline;
+pub mod selectors;
 pub mod shader;
 pub mod surface;
 pub mod swapchain;

@@ -15,8 +15,6 @@ use crate::vk::{
     swapchain::Swapchain,
 };
 
-use super::device;
-
 pub struct GraphicsPipelineBuilder {
     device: Arc<Device>,
     swapchain: Arc<Swapchain>,

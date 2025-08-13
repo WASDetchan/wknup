@@ -13,6 +13,8 @@ use crate::vk::{
 
 use thiserror;
 
+use super::selectors::DrawQueueFamilySelector;
+
 #[derive(Debug, thiserror::Error)]
 #[error("the swapchain SwapchainManager currently has is missing or invalid")]
 pub struct InvalidSwapchainError;
@@ -123,15 +125,14 @@ impl SwapchainManager {
     pub fn new(device: Arc<Device>, surface: Arc<SurfaceManager>) -> Self {
         Self { device, surface }
     }
-    pub fn create_swapchain(&self) -> Result<Swapchain, Box<dyn Error>> {
+    pub fn create_swapchain(
+        &self,
+        queue_family_selector: DrawQueueFamilySelector,
+    ) -> Result<Swapchain, Box<dyn Error>> {
         let surface_info = self.device.get_surface_info()?;
-        let queue_family_chooser = self
-            .device
-            .get_physical_device_choice()
-            .queue_family_chooser;
 
-        let graphic = queue_family_chooser.graphics.unwrap();
-        let present = queue_family_chooser.present.unwrap();
+        let graphic = queue_family_selector.graphics.unwrap();
+        let present = queue_family_selector.present.unwrap();
         let indices = [graphic as u32, present as u32];
 
         let capabilities = surface_info.capabilities;

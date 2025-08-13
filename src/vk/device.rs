@@ -8,63 +8,59 @@ use ash::vk::{
     PipelineCache, ShaderModule, SwapchainCreateInfoKHR, SwapchainKHR,
 };
 use device_extensions::DeviceExtensionManager;
-use queues::QueueFamilyChooser;
+use queues::{Queue, QueueFamilySelector, Queues};
 
 use super::{
     error::fatal_vk_error,
     instance::Instance,
     physical_device::{
-        self, Chooser, DrawQueues, PhysicalDeviceChoice,
+        self,
         features::{FeaturesInfo, PhysicalDeviceFeatures2},
     },
     surface::{PhysicalDeviceSurfaceInfo, SurfaceManager},
 };
 
-pub struct DeviceBuilder {
-    queue_family_chooser: Chooser,
+pub struct DeviceBuilder<S: QueueFamilySelector> {
+    queue_family_selector: S,
     instance: Arc<Instance>,
     surface: Arc<SurfaceManager>,
 }
 
-impl DeviceBuilder {
-    pub fn new(instance: Arc<Instance>, surface: Arc<SurfaceManager>) -> Self {
+impl<S: QueueFamilySelector> DeviceBuilder<S> {
+    pub fn new(
+        instance: Arc<Instance>,
+        surface: Arc<SurfaceManager>,
+        queue_family_selector: S,
+    ) -> Self {
         Self {
-            queue_family_chooser: Chooser::new(instance.clone(), surface.clone()),
+            queue_family_selector,
             instance,
             surface,
         }
     }
 
-    pub fn build(self) -> Result<Device, Box<dyn Error>> {
+    pub fn build(self) -> Result<(Device, S), Box<dyn Error>> {
         let physical_device_choice = physical_device::choose_physical_device(
             &self.instance,
-            self.queue_family_chooser.clone(),
+            self.queue_family_selector.clone(),
         )?;
 
         let physical_device = physical_device_choice.device;
-        let queue_family_chooser = physical_device_choice.queue_family_chooser.clone();
+        let queue_family_selector = physical_device_choice.queue_family_selector.clone();
 
-        let requirements = queue_family_chooser.requirements();
+        let requirements = queue_family_selector.requirements();
 
-        if physical_device_choice
-            .queue_counts
-            .iter()
-            .enumerate()
-            .map(|(qid, count)| {
-                requirements
-                    .iter()
-                    .filter(|(id, _)| *id as usize == qid)
-                    .count()
-                    <= 1
-                    && requirements
-                        .iter()
-                        .map(|(id, v)| (*id, v.len()))
-                        .find(|(id, len)| *id as usize == qid && *len > *count as usize)
-                        .is_none()
-            })
-            .any(|b| !b)
-        {
-            panic!("queue selector returned invalid requirements!");
+        let len = physical_device_choice.queue_counts.len();
+        let mut queue_counts = Vec::new();
+        queue_counts.resize(len, 0);
+        for (id, priorities) in requirements.iter() {
+            if *id as usize >= len
+                || queue_counts[*id as usize] != 0
+                || (physical_device_choice.queue_counts[*id as usize] as usize) < priorities.len()
+            {
+                panic!("queue selector returned invalid requirements!");
+            }
+            queue_counts[*id as usize] = priorities.len();
         }
 
         let queue_infos: Vec<_> = requirements
@@ -94,34 +90,16 @@ impl DeviceBuilder {
 
         let device = unsafe { self.instance.create_device(physical_device, &device_info) }?;
 
-        let queues_raw = requirements
-            .iter()
-            .map(|(queue_family_index, priorities)| {
-                (
-                    *queue_family_index,
-                    priorities
-                        .iter()
-                        .enumerate()
-                        .map(|(queue_index, _)| unsafe {
-                            device.get_device_queue(
-                                *queue_family_index,
-                                queue_index.try_into().unwrap(),
-                            )
-                        })
-                        .collect::<Vec<vk::Queue>>(),
-                )
-            })
-            .collect();
-
-        let queues = queue_family_chooser.fill_queues(queues_raw);
-
-        Ok(Device {
-            instance: self.instance,
-            surface: self.surface,
-            physical_device_choice,
-            device,
-            queues,
-        })
+        Ok((
+            Device {
+                instance: self.instance,
+                surface: self.surface,
+                physical_device: physical_device_choice.device,
+                device,
+                queue_counts,
+            },
+            physical_device_choice.queue_family_selector,
+        ))
     }
 }
 
@@ -136,9 +114,9 @@ pub struct PhysicalDeviceInfo {
 pub struct Device {
     instance: Arc<Instance>,
     surface: Arc<SurfaceManager>,
-    physical_device_choice: PhysicalDeviceChoice<Chooser>,
+    physical_device: vk::PhysicalDevice,
     device: ash::Device,
-    queues: DrawQueues,
+    queue_counts: Vec<usize>,
 }
 impl Device {
     pub fn create_swapchain(
@@ -150,11 +128,15 @@ impl Device {
 
     pub fn get_surface_info(&self) -> Result<PhysicalDeviceSurfaceInfo, vk::Result> {
         self.surface
-            .get_physical_device_surface_info(self.physical_device_choice.device)
+            .get_physical_device_surface_info(self.physical_device)
     }
 
-    pub fn get_physical_device_choice(&self) -> PhysicalDeviceChoice<Chooser> {
-        self.physical_device_choice.clone()
+    pub fn get_queue_family_count(&self) -> usize {
+        self.queue_counts.len()
+    }
+
+    pub fn get_queue_counts(&self) -> Vec<usize> {
+        self.queue_counts.clone()
     }
 
     pub unsafe fn destroy_swapchain(&self, swapchain: SwapchainKHR) -> Result<(), Box<dyn Error>> {
@@ -272,4 +254,40 @@ impl Drop for Device {
     fn drop(&mut self) {
         self.destroy_device();
     }
+}
+pub fn fill_selector(device: Arc<Device>, selector: impl QueueFamilySelector) -> impl Queues {
+    let requirements = selector.requirements();
+
+    let len = device.get_queue_family_count();
+    let queue_counts = device.get_queue_counts();
+    for (id, priorities) in requirements.iter() {
+        if *id as usize >= len || (queue_counts[*id as usize] as usize) < priorities.len() {
+            panic!("queue selector returned invalid requirements!");
+        }
+    }
+    let queues_raw = requirements
+        .iter()
+        .map(|(queue_family_index, priorities)| {
+            (
+                *queue_family_index,
+                priorities
+                    .iter()
+                    .enumerate()
+                    .map(|(queue_index, _)| unsafe {
+                        Queue::new(
+                            Arc::clone(&device),
+                            device.raw_handle().get_device_queue(
+                                *queue_family_index,
+                                queue_index.try_into().unwrap(),
+                            ),
+                        )
+                    })
+                    .collect::<Vec<Queue>>(),
+            )
+        })
+        .collect();
+
+    let queues = selector.fill_queues(queues_raw);
+
+    queues
 }

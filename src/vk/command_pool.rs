@@ -20,10 +20,10 @@ impl CommandPool {
         device: Arc<Device>,
         queue_family_index: u32,
     ) -> Result<Self, CommandPoolCreationError> {
-        if queue_family_index as usize >= device.get_physical_device_choice().queue_counts.len() {
+        if queue_family_index as usize >= device.get_queue_family_count() {
             return Err(CommandPoolCreationError::InvalidQueueFamily(
                 queue_family_index as usize,
-                device.get_physical_device_choice().queue_counts.len(),
+                device.get_queue_family_count(),
             ));
         }
         let create_info =
@@ -35,5 +35,15 @@ impl CommandPool {
             device,
             command_pool,
         })
+    }
+}
+
+impl Drop for CommandPool {
+    fn drop(&mut self) {
+        unsafe {
+            self.device
+                .raw_handle()
+                .destroy_command_pool(self.command_pool, None);
+        }
     }
 }

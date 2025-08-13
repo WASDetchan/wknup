@@ -6,16 +6,16 @@ use std::{error::Error, ffi::CStr, sync::Arc};
 
 use ash::vk::{
     self, DeviceCreateInfo, DeviceQueueCreateInfo, ImageView, PhysicalDevice,
-    PhysicalDeviceProperties, PipelineCache, Queue, ShaderModule, SwapchainCreateInfoKHR,
-    SwapchainKHR,
+    PhysicalDeviceProperties, PipelineCache, ShaderModule, SwapchainCreateInfoKHR, SwapchainKHR,
 };
 use device_extensions::DeviceExtensionManager;
+use queues::QueueFamilyChooser;
 
 use super::{
     error::fatal_vk_error,
     instance::Instance,
     physical_device::{
-        self, Chooser, PhysicalDeviceChoice,
+        self, Chooser, DrawQueues, PhysicalDeviceChoice,
         features::{FeaturesInfo, PhysicalDeviceFeatures2},
     },
     surface::{PhysicalDeviceSurfaceInfo, SurfaceManager},
@@ -46,21 +46,16 @@ impl DeviceBuilder {
             self.queue_family_chooser.clone(),
         )?;
 
-        let graphic_present_match =
-            queue_family_chooser.graphics.unwrap() == queue_family_chooser.present.unwrap();
+        let requirements = queue_family_chooser.requirements();
 
-        let graphic_info = DeviceQueueCreateInfo::default()
-            .queue_family_index(queue_family_chooser.graphics.unwrap() as u32)
-            .queue_priorities(&[0.0f32]);
-        let present_info = DeviceQueueCreateInfo::default()
-            .queue_family_index(queue_family_chooser.present.unwrap() as u32)
-            .queue_priorities(&[0.0f32]);
-
-        let queue_infos = if graphic_present_match {
-            vec![graphic_info]
-        } else {
-            vec![graphic_info, present_info]
-        };
+        let queue_infos: Vec<_> = requirements
+            .iter()
+            .map(|(id, priorities)| {
+                DeviceQueueCreateInfo::default()
+                    .queue_family_index(*id)
+                    .queue_priorities(priorities)
+            })
+            .collect();
 
         let features2 = PhysicalDeviceFeatures2::new_required();
 
@@ -80,15 +75,26 @@ impl DeviceBuilder {
 
         let device = unsafe { self.instance.create_device(physical_device, &device_info) }?;
 
-        let graphic_queue =
-            unsafe { device.get_device_queue(queue_family_chooser.graphics.unwrap() as u32, 0) };
-        let present_queue =
-            unsafe { device.get_device_queue(queue_family_chooser.present.unwrap() as u32, 0) };
+        let queues_raw = requirements
+            .iter()
+            .map(|(queue_family_index, priorities)| {
+                (
+                    *queue_family_index,
+                    priorities
+                        .iter()
+                        .enumerate()
+                        .map(|(queue_index, _)| unsafe {
+                            device.get_device_queue(
+                                *queue_family_index,
+                                queue_index.try_into().unwrap(),
+                            )
+                        })
+                        .collect::<Vec<vk::Queue>>(),
+                )
+            })
+            .collect();
 
-        let queues = Queues {
-            graphics: graphic_queue,
-            present: present_queue,
-        };
+        let queues = queue_family_chooser.fill_queues(queues_raw);
 
         Ok(Device {
             instance: self.instance,
@@ -104,12 +110,6 @@ impl DeviceBuilder {
 pub const REQUIRED_DEVICE_EXTENSIONS: [&CStr; 2] =
     [c"VK_KHR_swapchain", c"VK_KHR_vulkan_memory_model"];
 
-#[allow(dead_code)]
-struct Queues {
-    graphics: Queue,
-    present: Queue,
-}
-
 pub struct PhysicalDeviceInfo {
     pub properties: PhysicalDeviceProperties,
     pub features: FeaturesInfo,
@@ -121,7 +121,7 @@ pub struct Device {
     physical_device: PhysicalDevice,
     queue_family_chooser: Chooser,
     device: ash::Device,
-    queues: Queues,
+    queues: DrawQueues,
 }
 impl Device {
     pub fn create_swapchain(

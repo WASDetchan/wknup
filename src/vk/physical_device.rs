@@ -5,11 +5,22 @@ use std::sync::Arc;
 use ash::vk::{self, PhysicalDevice, PhysicalDeviceType, QueueFamilyProperties, QueueFlags};
 
 use super::{
-    device::{self, device_extensions, queues::family_chooser::QueueFamilyChooser, swapchain},
+    device::{
+        self, device_extensions,
+        queues::{QueueFamilyChooser, Queues},
+        swapchain,
+    },
     error::fatal_vk_error,
     instance::Instance,
     surface::SurfaceManager,
 };
+
+pub struct DrawQueues {
+    graphics: vk::Queue,
+    present: vk::Queue,
+}
+
+impl Queues for DrawQueues {}
 
 #[derive(Clone)]
 pub struct Chooser {
@@ -59,6 +70,7 @@ impl Chooser {
 }
 
 impl QueueFamilyChooser for Chooser {
+    type Q = DrawQueues;
     fn inspect_queue_family(
         &mut self,
         physical_device: vk::PhysicalDevice,
@@ -76,13 +88,41 @@ impl QueueFamilyChooser for Chooser {
     fn is_complete(&self) -> bool {
         self.graphics.is_some() && self.present.is_some()
     }
+
+    fn requirements(&self) -> Vec<(u32, Vec<f32>)> {
+        if !self.is_complete() {
+            panic!("asked for requirements of an unscompleted chooser!");
+        }
+
+        let g = self.graphics.unwrap();
+        let p = self.present.unwrap();
+
+        if g == p {
+            return vec![(g, vec![0.0f32])];
+        } else {
+            return vec![(g, vec![0.0f32]), (p, vec![0.0f32])];
+        }
+    }
+
+    fn fill_queues(&self, queues_raw: Vec<(u32, Vec<vk::Queue>)>) -> DrawQueues {
+        if !self.is_complete() {
+            panic!("filled queues of an unscompleted chooser!");
+        }
+        let g = self.graphics.unwrap();
+        let p = self.present.unwrap();
+
+        DrawQueues {
+            present: queues_raw.iter().find(|(id, _queues)| *id == g).unwrap().1[0],
+            graphics: queues_raw.iter().find(|(id, _queues)| *id == p).unwrap().1[0],
+        }
+    }
 }
 
-fn rate_physical_device<QFC: QueueFamilyChooser>(
+fn rate_physical_device<T: QueueFamilyChooser>(
     instance: &Arc<Instance>,
     device: PhysicalDevice,
-    mut qfc: QFC,
-) -> PhysicalDeviceChoice<QFC> {
+    mut qfc: T,
+) -> PhysicalDeviceChoice<T> {
     let info = unsafe { instance.get_physical_device_info(device) };
     let props = info.properties;
     let features = info.features;

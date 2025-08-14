@@ -1,9 +1,12 @@
 use std::{error::Error, sync::Arc};
 
-use ash::vk::{
-    self, ColorSpaceKHR, CompositeAlphaFlagsKHR, Extent2D, Format, ImageAspectFlags,
-    ImageUsageFlags, ImageViewCreateInfo, PresentModeKHR, SharingMode, SurfaceCapabilitiesKHR,
-    SurfaceFormatKHR, SurfaceTransformFlagsKHR, SwapchainCreateInfoKHR, SwapchainKHR,
+use ash::{
+    khr::swapchain,
+    vk::{
+        self, ColorSpaceKHR, CompositeAlphaFlagsKHR, Extent2D, Format, ImageAspectFlags,
+        ImageUsageFlags, ImageViewCreateInfo, PresentModeKHR, SharingMode, SurfaceCapabilitiesKHR,
+        SurfaceFormatKHR, SurfaceTransformFlagsKHR, SwapchainCreateInfoKHR, SwapchainKHR,
+    },
 };
 
 use crate::vk::{
@@ -13,7 +16,10 @@ use crate::vk::{
 
 use thiserror;
 
-use super::selectors::DrawQueueFamilySelector;
+use super::{
+    device, error::fatal_vk_error, fence::Fence, selectors::DrawQueueFamilySelector,
+    semaphore::Semaphore,
+};
 
 #[derive(Debug, thiserror::Error)]
 #[error("the swapchain SwapchainManager currently has is missing or invalid")]
@@ -61,6 +67,7 @@ fn choose_transform(capabilities: SurfaceCapabilitiesKHR) -> SurfaceTransformFla
 
 pub struct Swapchain {
     device: Arc<Device>,
+    swapchain_device: swapchain::Device,
     _surface: Arc<SurfaceManager>,
     swapchain_khr: SwapchainKHR,
     extent: Extent2D,
@@ -104,6 +111,25 @@ impl Swapchain {
             })
             .map(|fb| Arc::new(fb))
             .collect()
+    }
+    pub fn acquire_next_image(
+        &self,
+        semaphore: Option<&Semaphore>,
+        fence: Option<&Fence>,
+    ) -> (u32, bool) {
+        let semaphore = match semaphore {
+            Some(s) => unsafe { s.raw_handle() },
+            None => vk::Semaphore::null(),
+        };
+        let fence = match fence {
+            Some(s) => unsafe { s.raw_handle() },
+            None => vk::Fence::null(),
+        };
+        unsafe {
+            self.swapchain_device
+                .acquire_next_image(self.swapchain_khr, u64::MAX, semaphore, fence)
+                .unwrap_or_else(|error| fatal_vk_error("failed to acquire_next_image", error))
+        }
     }
 }
 impl Drop for Swapchain {
@@ -184,9 +210,12 @@ impl SwapchainManager {
             })
             .collect();
 
+        let swapchain_device = unsafe { self.device.make_swapchain_device() };
+
         Ok(Swapchain {
             _surface: Arc::clone(&self.surface),
             device: Arc::clone(&self.device),
+            swapchain_device,
             swapchain_khr,
             _images: images,
             views,

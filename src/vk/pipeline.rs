@@ -132,11 +132,14 @@ impl GraphicsPipeline {
             .create_framebuffers(Arc::clone(&self.render_pass));
     }
 
-    pub fn create_command_buffers(&self, command_pool: CommandPool) -> Vec<CommandBuffer> {
+    pub fn create_command_buffer(&self, command_pool: &CommandPool, index: u32) -> CommandBuffer {
         let mut command_buffer = command_pool.allocate_command_buffer();
         command_buffer.begin().unwrap();
         command_buffer
-            .cmd_begin_render_pass(Arc::clone(&self.render_pass), todo!())
+            .cmd_begin_render_pass(
+                Arc::clone(&self.render_pass),
+                self.framebuffers[index as usize],
+            )
             .unwrap();
         command_buffer
             .cmd_bind_graphics_pipeline(self.weak_self.upgrade().unwrap())
@@ -152,7 +155,7 @@ impl GraphicsPipeline {
             })
             .unwrap();
         command_buffer.end().unwrap();
-        Vec::new()
+        command_buffer
     }
 
     pub(in crate::vk) unsafe fn raw_handle(&self) -> vk::Pipeline {

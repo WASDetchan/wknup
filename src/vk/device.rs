@@ -3,9 +3,12 @@ pub mod queues;
 
 use std::{error::Error, ffi::CStr, sync::Arc};
 
-use ash::vk::{
-    self, DeviceCreateInfo, DeviceQueueCreateInfo, ImageView, PhysicalDeviceProperties,
-    PipelineCache, ShaderModule, SwapchainCreateInfoKHR, SwapchainKHR,
+use ash::{
+    khr,
+    vk::{
+        self, DeviceCreateInfo, DeviceQueueCreateInfo, ImageView, PhysicalDeviceProperties,
+        PipelineCache, ShaderModule, SwapchainCreateInfoKHR, SwapchainKHR,
+    },
 };
 use device_extensions::DeviceExtensionManager;
 use queues::{Queue, QueueFamilySelector, Queues};
@@ -248,6 +251,10 @@ impl Device {
 
     pub(in crate::vk) unsafe fn raw_handle(&self) -> ash::Device {
         self.device.clone()
+    }
+
+    pub(in crate::vk) unsafe fn make_swapchain_device(&self) -> khr::swapchain::Device {
+        unsafe { khr::swapchain::Device::new(&self.instance.raw_handle(), &self.device) }
     }
 }
 impl Drop for Device {

@@ -278,6 +278,10 @@ impl Instance {
         unsafe { loader.destroy_swapchain(swapchain, None) };
         Ok(())
     }
+
+    pub(in crate::vk) unsafe fn raw_handle(&self) -> ash::Instance {
+        self.instance.clone()
+    }
 }
 
 impl Drop for Instance {

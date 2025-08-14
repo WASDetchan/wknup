@@ -83,7 +83,7 @@ impl Swapchain {
     pub fn get_format(&self) -> SurfaceFormatKHR {
         self.format
     }
-    pub fn create_framebuffers(&self, render_pass: Arc<RenderPass>) -> Vec<Framebuffer> {
+    pub fn create_framebuffers(&self, render_pass: Arc<RenderPass>) -> Vec<Arc<Framebuffer>> {
         self.views
             .iter()
             .map(|view| {
@@ -99,8 +99,10 @@ impl Swapchain {
                     Arc::clone(&self.device),
                     Arc::clone(&render_pass),
                     framebuffer,
+                    self.extent,
                 )
             })
+            .map(|fb| Arc::new(fb))
             .collect()
     }
 }

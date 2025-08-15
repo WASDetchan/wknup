@@ -6,8 +6,9 @@ use std::{error::Error, ffi::CStr, sync::Arc};
 use ash::{
     khr,
     vk::{
-        self, DeviceCreateInfo, DeviceQueueCreateInfo, ImageView, PhysicalDeviceProperties,
-        PipelineCache, ShaderModule, SwapchainCreateInfoKHR, SwapchainKHR,
+        self, DeviceCreateInfo, DeviceQueueCreateInfo, ImageView,
+        PhysicalDeviceProperties, PipelineCache, ShaderModule,
+        SwapchainCreateInfoKHR, SwapchainKHR,
     },
 };
 use device_extensions::DeviceExtensionManager;
@@ -49,7 +50,8 @@ impl<S: QueueFamilySelector> DeviceBuilder<S> {
         )?;
 
         let physical_device = physical_device_choice.device;
-        let queue_family_selector = physical_device_choice.queue_family_selector.clone();
+        let queue_family_selector =
+            physical_device_choice.queue_family_selector.clone();
 
         let requirements = queue_family_selector.requirements();
 
@@ -59,7 +61,8 @@ impl<S: QueueFamilySelector> DeviceBuilder<S> {
         for (id, priorities) in requirements.iter() {
             if *id as usize >= len
                 || queue_counts[*id as usize] != 0
-                || (physical_device_choice.queue_counts[*id as usize] as usize) < priorities.len()
+                || (physical_device_choice.queue_counts[*id as usize] as usize)
+                    < priorities.len()
             {
                 panic!("queue selector returned invalid requirements!");
             }
@@ -91,7 +94,9 @@ impl<S: QueueFamilySelector> DeviceBuilder<S> {
             .enabled_extension_names(&ext_names)
             .push_next(&mut next);
 
-        let device = unsafe { self.instance.create_device(physical_device, &device_info) }?;
+        let device = unsafe {
+            self.instance.create_device(physical_device, &device_info)
+        }?;
 
         Ok((
             Device {
@@ -129,7 +134,9 @@ impl Device {
         unsafe { self.instance.create_swapchain(&self.device, create_info) }
     }
 
-    pub fn get_surface_info(&self) -> Result<PhysicalDeviceSurfaceInfo, vk::Result> {
+    pub fn get_surface_info(
+        &self,
+    ) -> Result<PhysicalDeviceSurfaceInfo, vk::Result> {
         self.surface
             .get_physical_device_surface_info(self.physical_device)
     }
@@ -142,7 +149,10 @@ impl Device {
         self.queue_counts.clone()
     }
 
-    pub unsafe fn destroy_swapchain(&self, swapchain: SwapchainKHR) -> Result<(), Box<dyn Error>> {
+    pub unsafe fn destroy_swapchain(
+        &self,
+        swapchain: SwapchainKHR,
+    ) -> Result<(), Box<dyn Error>> {
         unsafe { self.instance.destroy_swapchain(&self.device, swapchain) }
     }
 
@@ -157,11 +167,16 @@ impl Device {
         unsafe { self.instance.get_swapchain_images(&self.device, swapchain) }
     }
 
-    pub unsafe fn create_image_view(&self, create_info: &vk::ImageViewCreateInfo) -> vk::ImageView {
+    pub unsafe fn create_image_view(
+        &self,
+        create_info: &vk::ImageViewCreateInfo,
+    ) -> vk::ImageView {
         unsafe {
             self.device
                 .create_image_view(create_info, None)
-                .unwrap_or_else(|e| fatal_vk_error("failed to create_image_view", e))
+                .unwrap_or_else(|e| {
+                    fatal_vk_error("failed to create_image_view", e)
+                })
         }
     }
 
@@ -176,7 +191,9 @@ impl Device {
         unsafe {
             self.device
                 .create_shader_module(&create_info, None)
-                .unwrap_or_else(|e| fatal_vk_error("failed to create_shader_module", e))
+                .unwrap_or_else(|e| {
+                    fatal_vk_error("failed to create_shader_module", e)
+                })
         }
     }
 
@@ -193,7 +210,9 @@ impl Device {
         unsafe {
             self.device
                 .create_pipeline_layout(&create_info, None)
-                .unwrap_or_else(|e| fatal_vk_error("failed to create pipeline layout", e))
+                .unwrap_or_else(|e| {
+                    fatal_vk_error("failed to create pipeline layout", e)
+                })
         }
     }
 
@@ -217,9 +236,11 @@ impl Device {
         create_info: vk::GraphicsPipelineCreateInfo,
     ) -> Result<vk::Pipeline, vk::Result> {
         unsafe {
-            let result =
-                self.device
-                    .create_graphics_pipelines(PipelineCache::null(), &[create_info], None);
+            let result = self.device.create_graphics_pipelines(
+                PipelineCache::null(),
+                &[create_info],
+                None,
+            );
             match result {
                 Ok(ps) => Ok(ps[0]),
                 Err(ps) => Err(ps.1),
@@ -240,7 +261,9 @@ impl Device {
         unsafe {
             self.device
                 .create_framebuffer(create_info, None)
-                .unwrap_or_else(|e| fatal_vk_error("failed to create framebuffer", e))
+                .unwrap_or_else(|e| {
+                    fatal_vk_error("failed to create framebuffer", e)
+                })
         }
     }
     pub unsafe fn destroy_framebuffer(&self, framebuffer: vk::Framebuffer) {
@@ -253,8 +276,15 @@ impl Device {
         self.device.clone()
     }
 
-    pub(in crate::vk) unsafe fn make_swapchain_device(&self) -> khr::swapchain::Device {
-        unsafe { khr::swapchain::Device::new(&self.instance.raw_handle(), &self.device) }
+    pub(in crate::vk) unsafe fn make_swapchain_device(
+        &self,
+    ) -> khr::swapchain::Device {
+        unsafe {
+            khr::swapchain::Device::new(
+                &self.instance.raw_handle(),
+                &self.device,
+            )
+        }
     }
 }
 impl Drop for Device {
@@ -262,13 +292,18 @@ impl Drop for Device {
         self.destroy_device();
     }
 }
-pub fn fill_selector(device: Arc<Device>, selector: impl QueueFamilySelector) -> impl Queues {
+pub fn fill_selector<S: QueueFamilySelector>(
+    device: Arc<Device>,
+    selector: S,
+) -> S::Q {
     let requirements = selector.requirements();
 
     let len = device.get_queue_family_count();
     let queue_counts = device.get_queue_counts();
     for (id, priorities) in requirements.iter() {
-        if *id as usize >= len || (queue_counts[*id as usize] as usize) < priorities.len() {
+        if *id as usize >= len
+            || (queue_counts[*id as usize] as usize) < priorities.len()
+        {
             panic!("queue selector returned invalid requirements!");
         }
     }

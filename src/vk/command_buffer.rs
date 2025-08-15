@@ -54,6 +54,10 @@ impl CommandBuffer {
         }
     }
 
+    pub(in crate::vk) unsafe fn raw_handle(&self) -> vk::CommandBuffer {
+        self.command_buffer
+    }
+
     pub fn begin(&mut self) -> Result<(), CommandBufferStateError> {
         match self.state {
             CommandBufferState::Initial => (),
@@ -106,7 +110,7 @@ impl CommandBuffer {
 
     pub fn cmd_bind_graphics_pipeline(
         &mut self,
-        pipeline: Arc<GraphicsPipeline>,
+        pipeline: &GraphicsPipeline,
     ) -> Result<(), CommandBufferStateError> {
         if self.state != CommandBufferState::Recording {
             return Err(CommandBufferStateError(self.state));
@@ -169,6 +173,20 @@ impl CommandBuffer {
                 first_instance,
             );
         }
+        Ok(())
+    }
+
+    pub fn cmd_end_render_pass(&self) -> Result<(), CommandBufferStateError> {
+        if self.state != CommandBufferState::Recording {
+            return Err(CommandBufferStateError(self.state));
+        }
+
+        unsafe {
+            self.device
+                .raw_handle()
+                .cmd_end_render_pass(self.command_buffer);
+        }
+
         Ok(())
     }
 

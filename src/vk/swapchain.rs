@@ -131,6 +131,13 @@ impl Swapchain {
                 .unwrap_or_else(|error| fatal_vk_error("failed to acquire_next_image", error))
         }
     }
+
+    pub(in crate::vk) unsafe fn device_handle(&self) -> swapchain::Device {
+        self.swapchain_device.clone()
+    }
+    pub(in crate::vk) unsafe fn raw_handle(&self) -> SwapchainKHR {
+        self.swapchain_khr
+    }
 }
 impl Drop for Swapchain {
     fn drop(&mut self) {

@@ -5,6 +5,7 @@ use ash::vk;
 use layout::PipelineLayout;
 use render_pass::RenderPass;
 use std::{
+    cell::LazyCell,
     collections::HashMap,
     error::Error,
     sync::{Arc, Weak},
@@ -25,14 +26,20 @@ use super::command_buffer::DrawInfo;
 
 pub struct GraphicsPipelineBuilder {
     device: Arc<Device>,
+    command_pool: Arc<CommandPool>,
     swapchain: Arc<Swapchain>,
     shader_stages: HashMap<String, ShaderStageInfo>,
 }
 
 impl GraphicsPipelineBuilder {
-    pub fn new(device: Arc<Device>, swapchain: Arc<Swapchain>) -> Self {
+    pub fn new(
+        device: Arc<Device>,
+        swapchain: Arc<Swapchain>,
+        command_pool: Arc<CommandPool>,
+    ) -> Self {
         Self {
             device,
+            command_pool,
             swapchain,
             shader_stages: HashMap::new(),
         }
@@ -52,7 +59,7 @@ impl GraphicsPipelineBuilder {
             Ok(())
         }
     }
-    pub fn build(self) -> Result<Arc<GraphicsPipeline>, Box<dyn Error>> {
+    pub fn build(self) -> Result<GraphicsPipeline, Box<dyn Error>> {
         self.require_stage(ShaderStage::Vertex)?;
         self.require_stage(ShaderStage::Fragment)?;
         let fixed_function_state = FixedFuctionState::new();
@@ -96,33 +103,38 @@ impl GraphicsPipelineBuilder {
             .render_pass(unsafe { render_pass.raw_handle() })
             .subpass(0);
 
-        let framebuffers = self.swapchain.create_framebuffers(render_pass.clone());
-
         let pipeline = unsafe { self.device.create_graphics_pipeline(pipeline_create_info)? };
 
-        Ok(Arc::new_cyclic(|weak_self| GraphicsPipeline {
-            weak_self: Weak::clone(weak_self),
+        let mut pipeline = GraphicsPipeline {
             device: self.device,
             swapchain: self.swapchain,
             shader_stages: self.shader_stages,
             layout,
             render_pass,
             pipeline,
-            framebuffers,
-        }))
+            framebuffers: Vec::new(),
+            command_pool: self.command_pool,
+            command_buffers: Vec::new(),
+        };
+
+        pipeline.create_framebuffers();
+        pipeline.create_command_buffers();
+
+        Ok(pipeline)
     }
 }
 
 #[allow(dead_code)]
 pub struct GraphicsPipeline {
-    weak_self: Weak<Self>,
     device: Arc<Device>,
+    command_pool: Arc<CommandPool>,
     swapchain: Arc<Swapchain>,
     shader_stages: HashMap<String, ShaderStageInfo>,
     layout: PipelineLayout,
     render_pass: Arc<RenderPass>,
     pipeline: vk::Pipeline,
     framebuffers: Vec<Arc<Framebuffer>>,
+    command_buffers: Vec<Arc<CommandBuffer>>,
 }
 
 impl GraphicsPipeline {
@@ -132,30 +144,36 @@ impl GraphicsPipeline {
             .create_framebuffers(Arc::clone(&self.render_pass));
     }
 
-    pub fn create_command_buffer(&self, command_pool: &CommandPool, index: u32) -> CommandBuffer {
-        let mut command_buffer = command_pool.allocate_command_buffer();
-        command_buffer.begin().unwrap();
-        command_buffer
-            .cmd_begin_render_pass(
-                Arc::clone(&self.render_pass),
-                Arc::clone(&self.framebuffers[index as usize]),
-            )
-            .unwrap();
-        command_buffer
-            .cmd_bind_graphics_pipeline(self.weak_self.upgrade().unwrap())
-            .unwrap();
-        let (viewport, scissor) = self.swapchain.make_viewport().unwrap();
-        command_buffer.cmd_set_viewport(viewport).unwrap();
-        command_buffer.cmd_set_scissor(scissor).unwrap();
-        command_buffer
-            .cmd_draw(DrawInfo {
-                vertex_count: 3,
-                instance_count: 1,
-                ..Default::default()
+    pub fn create_command_buffers(&mut self) {
+        self.command_buffers = self
+            .framebuffers
+            .iter()
+            .map(|framebuffer| {
+                let mut command_buffer = self.command_pool.allocate_command_buffer();
+                command_buffer.begin().unwrap();
+                command_buffer
+                    .cmd_begin_render_pass(Arc::clone(&self.render_pass), Arc::clone(&framebuffer))
+                    .unwrap();
+                command_buffer.cmd_bind_graphics_pipeline(&self).unwrap();
+                let (viewport, scissor) = self.swapchain.make_viewport().unwrap();
+                command_buffer.cmd_set_viewport(viewport).unwrap();
+                command_buffer.cmd_set_scissor(scissor).unwrap();
+                command_buffer
+                    .cmd_draw(DrawInfo {
+                        vertex_count: 3,
+                        instance_count: 1,
+                        ..Default::default()
+                    })
+                    .unwrap();
+                command_buffer.cmd_end_render_pass();
+                command_buffer.end().unwrap();
+                Arc::new(command_buffer)
             })
-            .unwrap();
-        command_buffer.end().unwrap();
-        command_buffer
+            .collect();
+    }
+
+    pub fn get_command_buffer(&self, index: u32) -> Arc<CommandBuffer> {
+        Arc::clone(&self.command_buffers[index as usize])
     }
 
     pub(in crate::vk) unsafe fn raw_handle(&self) -> vk::Pipeline {

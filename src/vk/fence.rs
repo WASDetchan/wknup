@@ -83,7 +83,7 @@ pub struct Fence {
 
 impl Fence {
     pub fn new(device: Arc<Device>) -> Self {
-        let create_info = vk::FenceCreateInfo::default().flags(vk::FenceCreateFlags::SIGNALED);
+        let create_info = vk::FenceCreateInfo::default();
         let fence = unsafe {
             device
                 .raw_handle()

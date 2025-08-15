@@ -5,7 +5,7 @@ use ash::vk;
 use super::{
     device::queues::{Queue, QueueFamilySelector, Queues},
     instance::Instance,
-    surface::SurfaceManager,
+    surface::Surface,
     swapchain,
 };
 
@@ -19,13 +19,13 @@ impl Queues for DrawQueues {}
 #[derive(Clone)]
 pub struct DrawQueueFamilySelector {
     _instance: Arc<Instance>,
-    surface: Arc<SurfaceManager>,
+    surface: Arc<Surface>,
     pub graphics: Option<u32>,
     pub present: Option<u32>,
 }
 
 impl DrawQueueFamilySelector {
-    pub fn new(instance: Arc<Instance>, surface: Arc<SurfaceManager>) -> Self {
+    pub fn new(instance: Arc<Instance>, surface: Arc<Surface>) -> Self {
         Self {
             _instance: instance,
             surface,
@@ -39,15 +39,12 @@ impl DrawQueueFamilySelector {
         id: u32,
         _props: vk::QueueFamilyProperties,
     ) -> bool {
-        let support =
-            self.surface.get_physical_device_surface_support(device, id);
+        let support = self.surface.get_physical_device_surface_support(device, id);
         if !support.is_ok_and(|s| s) {
             return false;
         }
 
-        let Ok(surface_info) =
-            self.surface.get_physical_device_surface_info(device)
-        else {
+        let Ok(surface_info) = self.surface.get_physical_device_surface_info(device) else {
             return false;
         };
         if !swapchain::check_surface_info(surface_info) {
@@ -74,18 +71,10 @@ impl QueueFamilySelector for DrawQueueFamilySelector {
         queue_family_id: u32,
         queue_family_properties: vk::QueueFamilyProperties,
     ) {
-        if self.filter_graphic_qf(
-            physical_device,
-            queue_family_id,
-            queue_family_properties,
-        ) {
+        if self.filter_graphic_qf(physical_device, queue_family_id, queue_family_properties) {
             self.graphics = Some(queue_family_id);
         };
-        if self.filter_present_qf(
-            physical_device,
-            queue_family_id,
-            queue_family_properties,
-        ) {
+        if self.filter_present_qf(physical_device, queue_family_id, queue_family_properties) {
             self.present = Some(queue_family_id);
         }
     }
@@ -117,18 +106,8 @@ impl QueueFamilySelector for DrawQueueFamilySelector {
         let p = self.present.unwrap();
 
         DrawQueues {
-            present: queues_raw
-                .iter()
-                .find(|(id, _queues)| *id == p)
-                .unwrap()
-                .1[0]
-                .clone(),
-            graphics: queues_raw
-                .iter()
-                .find(|(id, _queues)| *id == g)
-                .unwrap()
-                .1[0]
-                .clone(),
+            present: queues_raw.iter().find(|(id, _queues)| *id == p).unwrap().1[0].clone(),
+            graphics: queues_raw.iter().find(|(id, _queues)| *id == g).unwrap().1[0].clone(),
         }
     }
 }

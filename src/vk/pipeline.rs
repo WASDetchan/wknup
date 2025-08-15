@@ -4,12 +4,7 @@ pub mod render_pass;
 use ash::vk;
 use layout::PipelineLayout;
 use render_pass::RenderPass;
-use std::{
-    cell::LazyCell,
-    collections::HashMap,
-    error::Error,
-    sync::{Arc, Weak},
-};
+use std::{collections::HashMap, error::Error, sync::Arc};
 
 use fixed_function_state::FixedFuctionState;
 
@@ -165,7 +160,7 @@ impl GraphicsPipeline {
                         ..Default::default()
                     })
                     .unwrap();
-                command_buffer.cmd_end_render_pass();
+                command_buffer.cmd_end_render_pass().unwrap();
                 command_buffer.end().unwrap();
                 Arc::new(command_buffer)
             })

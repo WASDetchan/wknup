@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{fmt, sync::Arc};
 
 use ash::vk::{self, PhysicalDevice, SurfaceKHR};
 
@@ -11,19 +11,32 @@ pub struct PhysicalDeviceSurfaceInfo {
     pub formats: Vec<vk::SurfaceFormatKHR>,
     pub present_modes: Vec<vk::PresentModeKHR>,
 }
-pub struct SurfaceManager {
+pub struct Surface {
     instance: SurfaceInstance,
     surface: SurfaceKHR,
 }
 
-impl SurfaceManager {
+impl Surface {
     pub fn init(instance: Arc<Instance>, window: &WindowManager) -> Result<Self, sdl3::Error> {
         let surface = window.create_surface(&instance)?;
         let surface_instance = SurfaceInstance::new(instance);
-        Ok(Self {
+        let surface = Self {
             instance: surface_instance,
             surface,
-        })
+        };
+
+        log::info!("Created {:?}", surface);
+        log::debug!(
+            surface:?;
+            "
+{:?} Info:
+instance: {:?}
+",
+            surface,
+            surface.instance,
+        );
+
+        Ok(surface)
     }
 
     pub fn get_physical_device_surface_support(
@@ -55,7 +68,13 @@ impl SurfaceManager {
     }
 }
 
-impl Drop for SurfaceManager {
+impl fmt::Debug for Surface {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Surface {:?}", self.surface)
+    }
+}
+
+impl Drop for Surface {
     fn drop(&mut self) {
         unsafe {
             self.instance.destroy_surface(self.surface);

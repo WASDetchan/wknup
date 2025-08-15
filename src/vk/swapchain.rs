@@ -1,4 +1,9 @@
-use std::{error::Error, sync::Arc};
+use std::{
+    cell::LazyCell,
+    error::Error,
+    ops::DerefMut,
+    sync::{Arc, LazyLock, OnceLock, RwLock},
+};
 
 use ash::{
     khr::swapchain,
@@ -11,13 +16,15 @@ use ash::{
 
 use crate::vk::{
     device::Device, framebuffer::Framebuffer, pipeline::render_pass::RenderPass,
-    surface::PhysicalDeviceSurfaceInfo, surface::SurfaceManager,
+    surface::PhysicalDeviceSurfaceInfo, surface::Surface,
 };
 
 use thiserror;
 
 use super::{
-    device, error::fatal_vk_error, fence::Fence, selectors::DrawQueueFamilySelector,
+    error::fatal_vk_error,
+    fence::{self, Fence},
+    selectors::DrawQueueFamilySelector,
     semaphore::Semaphore,
 };
 
@@ -68,13 +75,14 @@ fn choose_transform(capabilities: SurfaceCapabilitiesKHR) -> SurfaceTransformFla
 pub struct Swapchain {
     device: Arc<Device>,
     swapchain_device: swapchain::Device,
-    _surface: Arc<SurfaceManager>,
+    _surface: Arc<Surface>,
     swapchain_khr: SwapchainKHR,
     extent: Extent2D,
     format: SurfaceFormatKHR,
     _present_mode: PresentModeKHR,
     _images: Vec<vk::Image>,
     views: Vec<vk::ImageView>,
+    acquire_image_fence: RwLock<Fence>,
 }
 
 impl Swapchain {
@@ -112,24 +120,29 @@ impl Swapchain {
             .map(|fb| Arc::new(fb))
             .collect()
     }
-    pub fn acquire_next_image(
-        &self,
-        semaphore: Option<&Semaphore>,
-        fence: Option<&Fence>,
-    ) -> (u32, bool) {
+
+    ///
+    /// Acquires next swapchain image index.
+    /// Will block thread if previous acquire operation is in progress
+    ///
+    pub async fn acquire_next_image(&self, semaphore: Option<&Semaphore>) -> (u32, bool) {
         let semaphore = match semaphore {
             Some(s) => unsafe { s.raw_handle() },
             None => vk::Semaphore::null(),
         };
-        let fence = match fence {
-            Some(s) => unsafe { s.raw_handle() },
-            None => vk::Fence::null(),
+        let fence = self.acquire_image_fence.try_write();
+        let Ok(mut fence) = fence else {
+            log::error!("Tried to acquire_next_image when previous operation was not finished");
+            panic!("Tried to acquire_next_image when previous operation was not finished");
         };
-        unsafe {
+        fence.reset();
+        let result = unsafe {
             self.swapchain_device
-                .acquire_next_image(self.swapchain_khr, u64::MAX, semaphore, fence)
+                .acquire_next_image(self.swapchain_khr, u64::MAX, semaphore, fence.raw_handle())
                 .unwrap_or_else(|error| fatal_vk_error("failed to acquire_next_image", error))
-        }
+        };
+        fence.deref_mut().await;
+        result
     }
 
     pub(in crate::vk) unsafe fn device_handle(&self) -> swapchain::Device {
@@ -153,11 +166,11 @@ impl Drop for Swapchain {
 }
 pub struct SwapchainManager {
     device: Arc<Device>,
-    surface: Arc<SurfaceManager>,
+    surface: Arc<Surface>,
 }
 
 impl SwapchainManager {
-    pub fn new(device: Arc<Device>, surface: Arc<SurfaceManager>) -> Self {
+    pub fn new(device: Arc<Device>, surface: Arc<Surface>) -> Self {
         Self { device, surface }
     }
     pub fn create_swapchain(
@@ -229,6 +242,7 @@ impl SwapchainManager {
             format,
             _present_mode: present_mode,
             extent,
+            acquire_image_fence: Fence::new(Arc::clone(&self.device)).into(),
         })
     }
 }

@@ -67,23 +67,39 @@ impl VulkanResult {
         match self {
             Self::Success => "Command completed successfully",
             Self::NotReady => "A fence or query has not yet completed",
-            Self::Timeout => "A wait operation has not completed in the specified time",
+            Self::Timeout => {
+                "A wait operation has not completed in the specified time"
+            }
             Self::EventSet => "An event is signaled",
             Self::EventReset => "An event is unsignaled",
             Self::Incomplete => "A return array was too small for the result",
             Self::ErrorOutOfHostMemory => "A host memory allocation has failed",
-            Self::ErrorOutOfDeviceMemory => "A device memory allocation has failed",
-            Self::ErrorInitializationFailed => "Initialization of an object has failed",
+            Self::ErrorOutOfDeviceMemory => {
+                "A device memory allocation has failed"
+            }
+            Self::ErrorInitializationFailed => {
+                "Initialization of an object has failed"
+            }
             Self::ErrorDeviceLost => {
                 "The logical device has been lost. See <https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#devsandqueues-lost-device>"
             }
-            Self::ErrorMemoryMapFailed => "Mapping of a memory object has failed",
+            Self::ErrorMemoryMapFailed => {
+                "Mapping of a memory object has failed"
+            }
             Self::ErrorLayerNotPresent => "Layer specified does not exist",
-            Self::ErrorExtensionNotPresent => "Extension specified does not exist",
-            Self::ErrorFeatureNotPresent => "Requested feature is not available on this device",
+            Self::ErrorExtensionNotPresent => {
+                "Extension specified does not exist"
+            }
+            Self::ErrorFeatureNotPresent => {
+                "Requested feature is not available on this device"
+            }
             Self::ErrorIncompatibleDriver => "Unable to find a Vulkan driver",
-            Self::ErrorTooManyObjects => "Too many objects of the type have already been created",
-            Self::ErrorFormatNotSupported => "Requested format is not supported on this device",
+            Self::ErrorTooManyObjects => {
+                "Too many objects of the type have already been created"
+            }
+            Self::ErrorFormatNotSupported => {
+                "Requested format is not supported on this device"
+            }
             Self::ErrorFragmentedPool => {
                 "A requested pool allocation has failed due to fragmentation of the pool's memory"
             }
@@ -102,6 +118,7 @@ impl From<vk::Result> for VulkanResult {
 
 pub fn fatal_vk_error<T: Into<VulkanResult>>(msg: &str, error: T) -> ! {
     let e = error.into();
+    log::error!("fatal: {}: {} ({})", msg, e, e.doc());
     panic!("fatal: {}: {} ({})", msg, e, e.doc());
 }
 

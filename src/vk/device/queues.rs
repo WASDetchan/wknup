@@ -1,15 +1,12 @@
-use std::{error, sync::Arc};
+use std::sync::Arc;
 
 use ash::vk;
 
 use super::Device;
 
 use crate::vk::{
-    command_buffer::CommandBuffer,
-    error::fatal_vk_error,
-    fence::Fence,
-    semaphore::Semaphore,
-    swapchain::{self, Swapchain},
+    command_buffer::CommandBuffer, error::fatal_vk_error, fence::Fence, semaphore::Semaphore,
+    swapchain::Swapchain,
 };
 
 pub trait QueueFamilySelector: Clone {
@@ -80,23 +77,12 @@ impl Queue {
         unsafe {
             self.device
                 .raw_handle()
-                .queue_submit(
-                    self.queue.as_ref().clone(),
-                    &[submit_info],
-                    fence,
-                )
-                .unwrap_or_else(|error| {
-                    fatal_vk_error("failed t osubmit queue", error)
-                });
+                .queue_submit(self.queue.as_ref().clone(), &[submit_info], fence)
+                .unwrap_or_else(|error| fatal_vk_error("failed t osubmit queue", error));
         }
     }
 
-    pub fn present(
-        &self,
-        swapchain: &Swapchain,
-        index: u32,
-        wait: &[&Semaphore],
-    ) {
+    pub fn present(&self, swapchain: &Swapchain, index: u32, wait: &[&Semaphore]) {
         let wait: Vec<_> = wait
             .into_iter()
             .map(|s| unsafe { s.raw_handle() })
@@ -115,9 +101,7 @@ impl Queue {
             swapchain
                 .device_handle()
                 .queue_present(self.queue.as_ref().clone(), &present_info)
-                .unwrap_or_else(|error| {
-                    fatal_vk_error("failed t osubmit queue", error)
-                });
+                .unwrap_or_else(|error| fatal_vk_error("failed t osubmit queue", error));
         }
     }
 }

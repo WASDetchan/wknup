@@ -4,7 +4,7 @@ static FENCE_SHUTDOWN: std::sync::atomic::AtomicBool = std::sync::atomic::Atomic
 /// makes every fence ready. every fence that is polled after prints an error
 #[cfg(debug_assertions)]
 pub fn fence_shutdown() {
-    eprintln!("Shutting down fences!");
+    log::warn!("Shutting down fences!");
     FENCE_SHUTDOWN.store(true, std::sync::atomic::Ordering::Relaxed);
 }
 

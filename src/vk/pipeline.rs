@@ -138,7 +138,7 @@ impl GraphicsPipeline {
         command_buffer
             .cmd_begin_render_pass(
                 Arc::clone(&self.render_pass),
-                self.framebuffers[index as usize],
+                Arc::clone(&self.framebuffers[index as usize]),
             )
             .unwrap();
         command_buffer

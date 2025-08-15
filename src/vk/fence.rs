@@ -1,18 +1,82 @@
+use core::task::Waker;
+use std::mem;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
+use std::thread::{self, JoinHandle};
 
 use ash::vk;
-use tokio::time::Duration;
+use std::time::Duration;
 
 use super::device::Device;
 use super::error::fatal_vk_error;
 
-const FENCE_POLL_PERIOD: Duration = Duration::from_micros(1000);
+const FENCE_POLL_PERIOD: Duration = Duration::from_micros(100000);
+
+enum FenceState {
+    Ready(vk::Fence),
+    Waiting(JoinHandle<vk::Fence>),
+}
+
+use FenceState::{Ready, Waiting};
+
+impl FenceState {
+    fn start_wait(&mut self, device: Arc<Device>, waker: Waker) {
+        let Ready(fence) = *self else {
+            panic!("Tried starting waiting for a fence that is already being waited for!");
+        };
+        *self = Waiting(thread::spawn(move || {
+            loop {
+                let code = unsafe {
+                    device.raw_handle().wait_for_fences(
+                        &[fence],
+                        true,
+                        FENCE_POLL_PERIOD.as_nanos().try_into().unwrap(),
+                    )
+                };
+                if check_shutdown() {
+                    break;
+                }
+                let Err(error) = code else {
+                    break;
+                };
+                if error != vk::Result::TIMEOUT {
+                    fatal_vk_error("failed to wait_for_fences", error);
+                }
+            }
+            waker.wake();
+            fence
+        }))
+    }
+
+    fn wait(&mut self) {
+        if let Ready(_) = *self {
+            return;
+        }
+        let s = mem::replace(self, Ready(vk::Fence::null()));
+        let Waiting(handle) = s else {
+            unreachable!();
+        };
+        *self = Ready(handle.join().unwrap());
+    }
+}
+
+impl Drop for Fence {
+    fn drop(&mut self) {
+        match self.fence {
+            Ready(fence) => unsafe {
+                self.device.raw_handle().destroy_fence(fence, None);
+            },
+            _ => {
+                panic!("FenceState cannot be dropped while being waited!");
+            }
+        }
+    }
+}
 
 pub struct Fence {
     device: Arc<Device>,
-    fence: vk::Fence,
+    fence: FenceState,
     #[cfg(debug_assertions)]
     name: String,
 }
@@ -29,7 +93,7 @@ impl Fence {
 
         Self {
             device,
-            fence,
+            fence: FenceState::Ready(fence),
             #[cfg(debug_assertions)]
             name: String::new(),
         }
@@ -37,14 +101,22 @@ impl Fence {
 
     pub fn reset(&mut self) {
         unsafe {
+            let Ready(fence) = self.fence else {
+                panic!("Fence cannot be reset while being waited for!");
+            };
             self.device
                 .raw_handle()
-                .reset_fences(&[self.fence])
+                .reset_fences(&[fence])
                 .unwrap_or_else(|error| fatal_vk_error("failed to reset fence", error));
         }
     }
     pub(in crate::vk) unsafe fn raw_handle(&self) -> vk::Fence {
-        self.fence
+        match self.fence {
+            Ready(fence) => fence,
+            _ => {
+                panic!("vk::Fence cannot be retrieved while being waited!");
+            }
+        }
     }
 
     #[cfg(debug_assertions)]
@@ -66,15 +138,20 @@ impl Fence {
 
 impl Future for Fence {
     type Output = ();
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        if check_shutdown() {
-            self.polled_after_shutdown();
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let Ready(fence) = self.fence else {
+            self.fence.wait();
+            if check_shutdown() {
+                self.polled_after_shutdown();
+            }
+
             return Poll::Ready(());
-        }
-        match unsafe { self.device.raw_handle().get_fence_status(self.fence) } {
+        };
+        match unsafe { self.device.raw_handle().get_fence_status(fence) } {
             Ok(true) => Poll::Ready(()),
             Ok(false) => {
-                spawn_poller(self.device.clone(), self.fence, cx.waker().clone());
+                let device_clone = Arc::clone(&self.device);
+                self.fence.start_wait(device_clone, cx.waker().clone());
                 Poll::Pending
             }
             Err(error) => fatal_vk_error("failed to get_fence_status", error),
@@ -94,28 +171,20 @@ const fn check_shutdown() -> bool {
     false
 }
 
-impl Drop for Fence {
-    fn drop(&mut self) {
-        unsafe {
-            self.device.raw_handle().destroy_fence(self.fence, None);
-        }
-    }
-}
-
-fn spawn_poller(device: Arc<Device>, fence: vk::Fence, waker: core::task::Waker) {
-    tokio::spawn(async move {
-        loop {
-            if check_shutdown()
-                || unsafe { device.raw_handle().get_fence_status(fence) } != Ok(false)
-            {
-                waker.wake();
-                break;
-            } else {
-                tokio::time::sleep(FENCE_POLL_PERIOD).await;
-            }
-        }
-    });
-}
+// fn spawn_poller(device: Arc<Device>, fence: vk::Fence, waker: Waker) {
+//     tokio::spawn(async move {
+//         loop {
+//             if check_shutdown()
+//                 || unsafe { device.raw_handle().get_fence_status(fence) } != Ok(false)
+//             {
+//                 waker.wake();
+//                 break;
+//             } else {
+//                 tokio::time::sleep(FENCE_POLL_PERIOD).await;
+//             }
+//         }
+//     });
+// }
 
 // let waker = cx.waker().clone();
 //                 let fence = self.fence;
